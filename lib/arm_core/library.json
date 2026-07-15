@@ -1,0 +1,9 @@
+{
+  "name": "arm_core",
+  "version": "0.1.0",
+  "description": "Portable, framework-free robot arm core: config, motion, kinematics, sequencer, protocol. Must compile with plain g++ (native env). Only allowed dependency: ArduinoJson v7.",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include"
+  }
+}
