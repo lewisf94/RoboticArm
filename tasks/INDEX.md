@@ -5,7 +5,7 @@ Execution order for agent sessions. Rules live in [`CLAUDE.md`](../CLAUDE.md): t
 Tasks marked **(hardware)** in their acceptance lists have items only the human can verify — implement, verify what's verifiable, and report the rest as "not verified (no hardware)".
 
 ## M1 — Core foundations & first motion
-- [ ] [T01 — Core config: JointConfig, ArmProfile, JointModel](T01-core-config.md)
+- [x] [T01 — Core config: JointConfig, ArmProfile, JointModel](T01-core-config.md)
 - [ ] [T02 — MotionController: slew limits + synchronized eased moves](T02-motion-controller.md)
 - [ ] [T03 — Protocol dispatcher in core](T03-protocol-dispatcher.md)
 - [ ] [T04 — LEDC servo HAL + firmware shell: first motion over serial](T04-ledc-hal-firmware.md)
