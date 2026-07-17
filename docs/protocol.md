@@ -18,18 +18,18 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
 
 | cmd | args | notes |
 |---|---|---|
-| `get_state` | — | one-shot state reply |
-| `get_profile` | — | joints[] (name, min, max, home, vmax), links (L1…), fw/proto versions |
+| `get_state` | — | one-shot reply, `type:"state"` (not `ack` — see below), `id` echoed if sent |
+| `get_profile` | — | see shape below |
 | `enable` | `on: bool` | `on:true` attaches outputs at current targets; `false` detaches |
 | `estop` | — | immediate detach; requires `enable` to re-arm; always acked |
-| `set_joint` | `j:int, deg:float, vmax?:float` | single joint target |
-| `set_joints` | `deg:[float…]` (null = leave) | multi-joint, synchronized arrival |
-| `jog` | `j:int, delta:float` | relative nudge, clamped |
+| `set_joint` | `j:int, deg:float, vmax?:float` | single joint target; requires `enable` |
+| `set_joints` | `deg:[float…]` (null = leave) | multi-joint, synchronized arrival; `deg` length must equal joint count; requires `enable` |
+| `jog` | `j:int, delta:float` | relative nudge of the *target*, clamped (not rejected) at the joint limit; requires `enable` |
 | `move_ik` | `x,y,z:float, pitch?:float, dur?:int` | M4+; cartesian target |
 | `jog_cart` | `dx,dy,dz:float` | M4+; relative cartesian nudge |
-| `grip` | `pct:float` (0=open, 100=closed) | maps to gripper joint range |
-| `set_trim` | `j:int, deg:float` | persisted (NVS) offset added at output |
-| `home` | `dur?:int` | synchronized move to profile home pose |
+| `grip` | `pct:float` (0=open, 100=closed) | maps to gripper joint range; `pct` is clamped to 0..100; requires `enable` |
+| `set_trim` | `j:int, deg:float` | persisted (NVS) offset added at output; applied live even if persistence fails (→ `err storage`); requires `enable` |
+| `home` | `dur?:int` | synchronized move to profile home pose; requires `enable` |
 | `save_pose` | `name:str` | stores current **targets** |
 | `goto_pose` | `name:str, dur?:int` | |
 | `list_poses` / `delete_pose` | — / `name` | |
@@ -44,13 +44,22 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
 // on connect (WS) or boot (serial)
 {"type":"hello","fw":"0.1.0","proto":1,"profile":"bench_3dof","joints":3}
 
-// 10 Hz
+// 10 Hz, and the reply to get_state (which adds "cmd"/"id" like any other
+// reply but keeps type:"state" rather than wrapping in an ack envelope -
+// the state shape already says everything needed)
 {"type":"state","t":123456,"en":true,
  "j":[45.0,10.2,-30.0],          // current commanded angles (deg, post-easing)
  "tgt":[45.0,20.0,-30.0],        // final targets
  "pose":{"x":180.1,"y":0.0,"z":62.3,"pitch":0.0},   // FK of j; null before M4
  "seq":{"name":"demo","step":2,"playing":true},      // null when idle
  "heap":123456}
+
+// reply to get_profile
+{"type":"ack","cmd":"get_profile",
+ "name":"bench_3dof",
+ "joints":[{"name":"base","min":-90,"max":90,"home":0,"vmax":120,"gripper":false}, "..."],
+ "geo":{"base_h":60,"r_off":0,"L1":120,"L2":140,"Lw":0,"wrist":false},
+ "fw":"0.1.0","proto":1}
 ```
 
 ## Examples
