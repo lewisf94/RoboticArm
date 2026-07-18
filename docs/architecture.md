@@ -39,8 +39,8 @@ Dependency direction is strictly downward-only in this diagram's terms: `src` ma
 
 ## Runtime model (firmware)
 
-- **Motion tick — 50 Hz** (matches the 20 ms servo PWM frame). A FreeRTOS timer/task calls `MotionController::tick(dt)`, which advances every joint toward its target under per-joint velocity limits and easing, then writes microsecond pulses through `IJointOutput`. No allocation, no JSON, no blocking in this path.
-- **Command path.** WebSocket callbacks (async) and the serial line reader both feed complete JSON lines into a small ring buffer; the main loop drains it, runs the shared protocol dispatcher, and applies results to core objects. Single consumer → no locking around core state.
+- **Motion tick — 50 Hz** (matches the 20 ms servo PWM frame). As of T04 this is a plain `millis()` deadline check in `loop()` (not a separate FreeRTOS timer/task — nothing in this firmware yet runs off the main loop, so there's no concurrent context to synchronize against, and `tick(dt_ms)` was already designed to take a variable, measured `dt` rather than assume a fixed period). It advances every joint toward its target under per-joint velocity limits and easing, then writes microsecond pulses through `IJointOutput`. No allocation, no JSON, no blocking in this path.
+- **Command path.** As of T04, serial-only: a single-threaded, single-producer line reader in `loop()` feeds complete JSON lines straight into the protocol dispatcher — no ring buffer needed yet, since polling and dispatch both happen in the same synchronous pass. T07 adds a second, genuinely async producer (WebSocket callbacks); that's when a ring buffer (or equivalent handoff) becomes necessary and this section should be revisited.
 - **Telemetry.** A 10 Hz task serializes the state message (see `docs/protocol.md`) and broadcasts to WS clients; serial gets state on request (or `stream on`).
 - **Persistence.** NVS (`Preferences`): WiFi credentials, per-joint trim offsets, active profile name. LittleFS: `/web/*` UI assets, `/data/poses.json`, `/data/sequences.json`.
 

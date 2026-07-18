@@ -1,0 +1,9 @@
+{
+  "name": "arm_hal",
+  "version": "0.1.0",
+  "description": "Hardware drivers implementing arm_core interfaces (LEDC servo output; PCA9685/steppers later). Arduino-framework only - not built by the native test env.",
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include"
+  }
+}
