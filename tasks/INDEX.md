@@ -8,7 +8,7 @@ Tasks marked **(hardware)** in their acceptance lists have items only the human 
 - [x] [T01 — Core config: JointConfig, ArmProfile, JointModel](T01-core-config.md)
 - [x] [T02 — MotionController: slew limits + synchronized eased moves](T02-motion-controller.md)
 - [x] [T03 — Protocol dispatcher in core](T03-protocol-dispatcher.md)
-- [ ] [T04 — LEDC servo HAL + firmware shell: first motion over serial](T04-ledc-hal-firmware.md)
+- [x] [T04 — LEDC servo HAL + firmware shell: first motion over serial](T04-ledc-hal-firmware.md)
 - [ ] [T05 — Trims in NVS, e-stop input, serial telemetry](T05-trims-estop-telemetry.md)
 
 ## M2 — WiFi + web UI v1

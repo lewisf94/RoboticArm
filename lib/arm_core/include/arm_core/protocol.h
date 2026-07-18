@@ -19,9 +19,11 @@ class Protocol {
 public:
     // Function-pointer hooks so firmware (NVS, HAL attach/detach) and tests
     // can plug in without arm_core depending on any platform headers.
-    // `enabled` and `ctx` are required (never null); the three callbacks may
-    // be null if a caller doesn't need that side effect (tests commonly
-    // don't).
+    // `enabled` is required (never null) - Protocol dereferences it directly.
+    // `ctx` and the three callbacks may all be null: Protocol only ever
+    // passes ctx through to a callback, never dereferences it itself, so a
+    // caller with no per-callback state (e.g. firmware driving a single
+    // global MotionController) can leave it null.
     struct SystemHooks {
         bool* enabled;                                           // shared with the firmware's tick loop
         void (*on_enable)(bool on, void* ctx);                    // attach/detach outputs
