@@ -67,7 +67,18 @@ Dependency direction is strictly downward-only in this diagram's terms: `src` ma
 | 9 | Elbow-up solution preferred by default | Matches desktop-arm builds; configurable per profile |
 | 10 | Sync moves: common duration = slowest joint, per-joint cubic ease over it | All joints arrive together → predictable straight-ish motion without a trajectory planner |
 | 11 | ROS 2 later via micro-ROS node **or** host bridge translating the serial protocol | Core stays framework-free either way; bridge is the cheap first step |
+| 13 | ROS 2 layer = host-side rclpy packages in `ros2/` (`arm_description`, `arm_bridge`, `arm_bringup` — milestone M8, pulled forward to run right after M1) speaking the existing serial protocol; micro-ROS on-device stays backlog | Lewis wants the SBR workflow (RViz/software first); the bridge form of ADR 11 delivers it with zero firmware changes and zero new on-device dependencies |
 | 12 | Steppers (NEMA 17 + TMC2209) are a later `IJointOutput` implementation + homing story, not a v1 concern | Keeps v1 power/electronics simple (single 5–6 V rail) |
+
+## ROS 2 layer (`ros2/`, milestone M8)
+
+Mirrors the Self-Balancing-Robot repo's shape, but as a **pure translator** around the device:
+
+- `arm_description` — URDF/xacro of the arm (built from the same profile constants as `arm_core`), RViz launch. Lets you pose the arm in software with zero hardware, like SBR's `sbr_description`.
+- `arm_bridge` — rclpy node: serial NDJSON (`docs/protocol.md`) on one side, `/joint_states` + target topic + enable/estop/home services on the other. **No motion, kinematics or safety logic here** — that all stays in `arm_core` on the ESP32; the bridge only converts formats and units.
+- `arm_bringup` — launch files: live RViz mirror of the bench, demo scripts.
+
+Units rule: ROS speaks **radians/metres**, the device speaks **degrees/millimetres**; conversion exists only inside `ros2/` (xacro + bridge). Built/tested only in CI (`ros:jazzy` container) or on a Jazzy machine — never in the agent sandbox, which has no ROS.
 
 ## Testing strategy
 

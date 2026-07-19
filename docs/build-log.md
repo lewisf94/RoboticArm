@@ -2,6 +2,13 @@
 
 Running diary — newest first. Agents append a short dated entry per completed task; the human adds hardware notes.
 
+## 2026-07-19 — Plan: ROS 2 integration promoted to a real milestone (M8, runs right after M1)
+
+- Lewis asked for the project to work "like the Self-Balancing-Robot repo": pose/test in ROS 2 software first, hardware after. This was always the designed-for path (ADR 11 kept `arm_core` framework-free and the protocol transport-agnostic) — now it's scheduled instead of backlog.
+- New tasks T23–T25 (`ros2/` workspace): `arm_description` (URDF + RViz sliders, zero hardware), `arm_bridge` (rclpy serial↔topics translator, no logic), `arm_bringup` (live RViz mirror + wave demo). Placed in INDEX order directly after T05; web UI (M2) shifted after them. Kept the M8 number to avoid renumbering 18 task files — INDEX order is execution order, and CLAUDE.md now says so explicitly.
+- Rules added to CLAUDE.md: `ros2/` is translator-only (no motion/safety logic off-device), radians/metres exist only inside `ros2/`, colcon runs only in CI (`ros:jazzy` container, added in T23) or on Lewis's machine — never in the agent sandbox.
+- MoveIt 2/Gazebo/micro-ROS-on-chip stay backlog (now M9).
+
 ## 2026-07-18 — T04: LEDC servo HAL + firmware shell (M1 hardware gate)
 
 - Added `IJointOutput` (`lib/arm_core`), `LedcServoOutput` (`lib/arm_hal`, arduino-esp32 2.0.17's channel-based LEDC API: `ledcSetup`/`ledcAttachPin`/`ledcWrite`/`ledcDetachPin` — confirmed via web search that `platform = espressif32@^6.12.0` maps to core 2.0.17, *not* the pin-centric `ledcAttach` API core 3.x replaced it with, since those have incompatible signatures), `src/pins.h`, and rewrote `src/main.cpp` into the real firmware shell: global `MotionController`/`LedcServoOutput`/`Protocol`, boot disabled/detached, `hello` line, non-blocking serial reader, 50 Hz `millis()`-driven tick.

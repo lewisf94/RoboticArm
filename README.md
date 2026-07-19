@@ -10,7 +10,7 @@ Companion project to [Self-Balancing-Robot](https://github.com/lewisf94/Self-Bal
 - **Poses & sequences** — teach named poses, chain them into timed pick-and-place sequences, persisted on the device.
 - **Live 3D visualizer** — a Three.js digital twin in the web UI, driven by the same kinematics; also runs in a browser-only sim mode with no hardware attached.
 - **Physical controls** — analog joystick jog mode (BLE gamepad as a stretch goal).
-- **ROS 2 ready, not ROS 2 dependent** — the core has zero Arduino/ROS dependencies, so a micro-ROS or host-side ROS 2 bridge is a later milestone, not a rewrite.
+- **ROS 2, SBR-style** — a `ros2/` layer (URDF + RViz model, serial bridge node, bringup launch) wraps the same protocol, so the arm is drivable from RViz/ROS 2 exactly like the Self-Balancing-Robot workflow. The device never depends on ROS; micro-ROS on-chip stays a backlog idea.
 
 ## Hardware at a glance
 
@@ -31,14 +31,15 @@ Planning is complete; implementation is task-driven (see below).
 | Milestone | Scope | Status |
 |---|---|---|
 | M0 | Repo scaffold, CI, planning docs | ✅ done |
-| M1 | Core foundations + first servo motion over serial | ⬜ |
+| M1 | Core foundations + first servo motion over serial | 🟡 code done — bench check pending |
+| M8 | ROS 2: URDF + RViz + serial bridge (pulled forward, runs next) | ⬜ |
 | M2 | WiFi, WebSocket, web UI with joint sliders | ⬜ |
 | M3 | Poses + sequence record/replay | ⬜ |
 | M4 | FK/IK + cartesian control | ⬜ |
 | M5 | Three.js 3D visualizer + browser sim mode | ⬜ |
 | M6 | Physical controls (joysticks, BLE gamepad stretch) | ⬜ |
 | M7 | Custom printed arm bring-up + calibration | ⬜ |
-| M8+ | Stepper joints, micro-ROS bridge, vision | backlog |
+| M9+ | Stepper joints, micro-ROS on-device, MoveIt/Gazebo, vision | backlog |
 
 Details: [docs/roadmap.md](docs/roadmap.md) · running diary: [docs/build-log.md](docs/build-log.md)
 
@@ -53,6 +54,8 @@ src/             Firmware shell: boot, WiFi, web/WS server, serial console, 50 H
 web/             Web UI sources (vanilla JS, no build step) → copied to data/ → LittleFS
 data/            LittleFS image contents (generated from web/, not hand-edited)
 test/            Native unit tests for arm_core (Unity)
+ros2/            ROS 2 Jazzy packages (arm_description, arm_bridge, arm_bringup) —
+                 a pure translator layer over the serial protocol (created in M8)
 docs/            Architecture, hardware, kinematics, protocol, roadmap, build log
 tasks/           Agent-executable task specs (T01…) — the implementation queue
 ```

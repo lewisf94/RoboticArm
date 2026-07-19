@@ -11,6 +11,8 @@ pio run  -e esp32s3 -t upload      # hardware only — never run in CI/remote se
 pio check -e native                # optional static analysis
 ```
 
+ROS 2 packages (`ros2/`) build only where ROS 2 Jazzy exists: the CI `ros2` job (`ros:jazzy` container) or the human's machine (`cd ros2 && colcon build && colcon test`). **Never attempt colcon/apt-ROS in the agent sandbox** — verify ROS-side work via CI, the same way as the esp32s3 build.
+
 There is no hardware attached in remote/CI sessions. Acceptance items marked **(hardware)** in task files are verified later by the human — list them as "not verified (no hardware)" in your final summary instead of skipping silently.
 
 **Restricted sandboxes (Claude Code on the web):** the SessionStart hook runs `scripts/agent_setup.sh`, which makes `pio test -e native` work even when the sandbox blocks the PlatformIO registry (fallbacks via GitHub/PyPI). If `ARM_PIO_REGISTRY=blocked` is set in your environment, the esp32s3 toolchain cannot be installed there: don't burn time retrying `pio run -e esp32s3` — say "esp32s3 build delegated to CI" in your summary and let GitHub Actions verify it. Native tests are still mandatory locally.
@@ -37,6 +39,7 @@ Never start a task whose dependencies (listed in its header) are unchecked, and 
 - Protocol messages are defined in `docs/protocol.md`. Any new command = update that doc in the same commit. Both transports (WebSocket, serial) share one dispatcher.
 - No new library dependencies unless the task file names them.
 - C++: C++17, no exceptions/RTTI in `arm_core` (return `Result`-style structs), no dynamic allocation in the 50 Hz motion path. `snake_case` files/functions, `PascalCase` types, `UPPER_SNAKE` constants.
+- `ros2/` is a **translator layer only**: URDF + a bridge speaking `docs/protocol.md` over serial. No motion/kinematics/safety logic there — that lives in `arm_core` on the device. Radians/metres exist only inside `ros2/` (conversion at the bridge/xacro boundary); the device protocol stays degrees/mm. Keep the bridge's protocol codec in a plain-Python module with no rclpy/serial imports so `colcon test` can unit-test it.
 
 ## Safety rules (this thing moves)
 
@@ -53,5 +56,6 @@ Never start a task whose dependencies (listed in its header) are unchecked, and 
 | Pin map, wiring, power | `docs/hardware.md` |
 | FK/IK math + golden test vectors | `docs/kinematics.md` |
 | Command schema | `docs/protocol.md` |
-| Task queue | `tasks/INDEX.md` |
+| Task queue | `tasks/INDEX.md` (top-to-bottom order = execution order, not milestone numbers) |
 | Arm geometry/joint config | `lib/arm_core/include/arm_core/profiles/` (created in T01) |
+| ROS 2 packages (URDF, bridge, launch) | `ros2/` (created in T23–T25) |
