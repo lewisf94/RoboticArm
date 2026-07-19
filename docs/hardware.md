@@ -34,7 +34,7 @@ Authoritative once `src/pins.h` exists (T04). Chosen to dodge every S3 landmine 
 | I²C SDA / SCL | 8 / 9 | PCA9685, current sensor, OLED |
 | Joystick axes (ADC1) | 1, 2, 4, 5 | **ADC1 only** — ADC2 (GPIO 11–20) is unusable while WiFi is on |
 | Joystick buttons | 6, 7 | input pull-up |
-| E-stop input | 10 | NC switch to GND, input pull-up |
+| E-stop input | 10 | NC switch to GND, input pull-up. **No switch wired? Jumper GPIO 10 → GND**, or the firmware treats the open pin as a triggered e-stop and refuses `enable` (fail-safe by design, T05) |
 | Onboard RGB LED | 48 | status (WS2812; some clones wire it to 38) |
 
 **Avoid / reserved on the S3:** 0, 3, 45, 46 (strapping) · 19/20 (USB D−/D+) · 43/44 (UART0) · 26–32 (flash) · **35–37 unavailable on Octal-PSRAM (R8) boards** · ADC2 pins for anything analog while WiFi is on.
@@ -54,7 +54,7 @@ The S3 has exactly **8 LEDC PWM channels** → 8 direct-driven servos max. A big
  GPIO 15/16/… → servo signal (orange/yellow)
 ```
 
-## Future: NEMA 17 joints (phase 2, M8)
+## Future: NEMA 17 joints (phase 2, M9 backlog)
 
 Your NEMA 17s become worthwhile for a bigger/stiffer arm or a geared base axis:
 - TMC2209 driver modules (step/dir, UART config), 12–24 V supply, per-axis endstop or sensorless homing for the missing absolute position.

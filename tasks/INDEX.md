@@ -11,6 +11,12 @@ Tasks marked **(hardware)** in their acceptance lists have items only the human 
 - [x] [T04 — LEDC servo HAL + firmware shell: first motion over serial](T04-ledc-hal-firmware.md)
 - [ ] [T05 — Trims in NVS, e-stop input, serial telemetry](T05-trims-estop-telemetry.md)
 
+## M8 — ROS 2 integration (pulled forward — runs right after M1)
+SBR-style workflow: pose the model in RViz first (no hardware, no firmware needed), then a live serial bridge to the bench. The ESP32 stays fully self-contained — these packages only *translate* the existing serial protocol; no logic moves into ROS. Numbered M8 because it was promoted from the backlog after the queue was created; **INDEX order (this file, top to bottom) is the execution order**, not milestone numbers.
+- [ ] [T23 — ROS 2: arm_description URDF + RViz](T23-ros2-description.md)
+- [ ] [T24 — ROS 2: serial bridge node](T24-ros2-bridge.md)
+- [ ] [T25 — ROS 2: bringup + live RViz mirror](T25-ros2-bringup.md)
+
 ## M2 — WiFi + web UI v1
 - [ ] [T06 — WiFi manager: STA + AP fallback + mDNS](T06-wifi-manager.md)
 - [ ] [T07 — HTTP server, LittleFS assets, WebSocket transport](T07-http-websocket.md)
