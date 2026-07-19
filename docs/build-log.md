@@ -2,6 +2,13 @@
 
 Running diary — newest first. Agents append a short dated entry per completed task; the human adds hardware notes.
 
+## 2026-07-19 — T05: Trims in NVS, e-stop input, serial telemetry (M1 software-complete)
+
+- Core: `stream` command (flag in `Protocol`, pacing/writing stays in the transport), `free_heap` and `inhibit_enable` hooks appended to `SystemHooks` *after* `ctx` so existing 5-field initializers keep compiling. `enable on:true` → `err disabled "estop pin active"` while the inhibit hook reports the physical pin open; `enable off` always allowed. 4 new tests (46/46 green).
+- Firmware: trims load from NVS at boot and persist on `set_trim` (`Preferences`, namespace `arm`, key `trim<j>`); debounced (20 ms) e-stop input on GPIO 10 — open acts exactly like the `estop` command, re-closing clears the inhibit but stays disabled until an explicit `enable`; WS2812 status LED (red disabled / green enabled / blue blink latched), written only on color change; 10 Hz `state` lines while streaming; heap reported via `ESP.getFreeHeap()`.
+- **Fail-safe trade-off worth knowing:** with nothing wired to GPIO 10 the pull-up reads "open" → firmware refuses `enable`. Deliberate (an accidentally-unplugged e-stop must not arm the outputs), documented in docs/hardware.md: benches without a switch jumper GPIO 10 → GND.
+- Verified the same way as T04: `pio test -e native` 46/46; `main.cpp` + HAL stub-compiled clean with `-Wall -Wextra` (stub extended with `Preferences`, `digitalRead`/`pinMode`, `neopixelWrite`, `ESP.getFreeHeap`); real esp32s3 compile delegated to CI. **(hardware)** trim-survives-reboot, e-stop wire pull mid-move, and 10 Hz stream not verified — no hardware in this session.
+
 ## 2026-07-19 — Plan: ROS 2 integration promoted to a real milestone (M8, runs right after M1)
 
 - Lewis asked for the project to work "like the Self-Balancing-Robot repo": pose/test in ROS 2 software first, hardware after. This was always the designed-for path (ADR 11 kept `arm_core` framework-free and the protocol transport-agnostic) — now it's scheduled instead of backlog.

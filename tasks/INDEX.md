@@ -9,7 +9,7 @@ Tasks marked **(hardware)** in their acceptance lists have items only the human 
 - [x] [T02 — MotionController: slew limits + synchronized eased moves](T02-motion-controller.md)
 - [x] [T03 — Protocol dispatcher in core](T03-protocol-dispatcher.md)
 - [x] [T04 — LEDC servo HAL + firmware shell: first motion over serial](T04-ledc-hal-firmware.md)
-- [ ] [T05 — Trims in NVS, e-stop input, serial telemetry](T05-trims-estop-telemetry.md)
+- [x] [T05 — Trims in NVS, e-stop input, serial telemetry](T05-trims-estop-telemetry.md)
 
 ## M8 — ROS 2 integration (pulled forward — runs right after M1)
 SBR-style workflow: pose the model in RViz first (no hardware, no firmware needed), then a live serial bridge to the bench. The ESP32 stays fully self-contained — these packages only *translate* the existing serial protocol; no logic moves into ROS. Numbered M8 because it was promoted from the backlog after the queue was created; **INDEX order (this file, top to bottom) is the execution order**, not milestone numbers.

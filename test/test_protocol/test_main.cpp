@@ -22,6 +22,7 @@ struct TestHooks {
     uint8_t last_trim_j = 0;
     float last_trim_deg = 0.0f;
     bool persist_should_fail = false;
+    bool inhibit = false;  // simulates the physical e-stop pin being open
 };
 
 void on_enable_cb(bool on, void* ctx) {
@@ -42,6 +43,12 @@ bool persist_trim_cb(uint8_t j, float deg, void* ctx) {
     return !h->persist_should_fail;
 }
 
+constexpr uint32_t kFakeHeapBytes = 42424;
+
+uint32_t free_heap_cb(void*) { return kFakeHeapBytes; }
+
+bool inhibit_enable_cb(void* ctx) { return static_cast<TestHooks*>(ctx)->inhibit; }
+
 struct Fixture {
     arm::MotionController motion;
     TestHooks hooks;
@@ -51,7 +58,7 @@ struct Fixture {
         : motion(profile),
           proto(motion, profile,
                 arm::Protocol::SystemHooks{&hooks.enabled, on_enable_cb, on_estop_cb, persist_trim_cb,
-                                            &hooks}) {}
+                                            &hooks, free_heap_cb, inhibit_enable_cb}) {}
 };
 
 // Calls handle_line and parses the reply with the library's own (default,
@@ -242,6 +249,51 @@ static void test_get_profile_shape() {
     TEST_ASSERT_TRUE(joints[2]["gripper"].as<bool>());
 }
 
+static void test_stream_toggles_flag_even_while_disabled() {
+    Fixture f(arm::kBench3Dof);
+    TEST_ASSERT_FALSE(f.hooks.enabled);  // stream is telemetry: no enable needed
+    TEST_ASSERT_FALSE(f.proto.stream());
+
+    auto doc = call(f.proto, R"({"cmd":"stream","on":true})");
+    TEST_ASSERT_EQUAL_STRING("ack", doc["type"].as<const char*>());
+    TEST_ASSERT_TRUE(f.proto.stream());
+
+    doc = call(f.proto, R"({"cmd":"stream","on":false})");
+    TEST_ASSERT_EQUAL_STRING("ack", doc["type"].as<const char*>());
+    TEST_ASSERT_FALSE(f.proto.stream());
+
+    doc = call(f.proto, R"({"cmd":"stream"})");  // missing 'on'
+    TEST_ASSERT_EQUAL_STRING("bad_args", doc["code"].as<const char*>());
+}
+
+static void test_heap_hook_value_appears_in_state() {
+    Fixture f(arm::kBench3Dof);
+    const auto doc = call(f.proto, R"({"cmd":"get_state"})");
+    TEST_ASSERT_EQUAL_UINT32(kFakeHeapBytes, doc["heap"].as<uint32_t>());
+}
+
+static void test_inhibit_enable_blocks_enable_on() {
+    Fixture f(arm::kBench3Dof);
+    f.hooks.inhibit = true;
+
+    const auto doc = call(f.proto, R"({"cmd":"enable","on":true})");
+    TEST_ASSERT_EQUAL_STRING("err", doc["type"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("disabled", doc["code"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("estop pin active", doc["msg"].as<const char*>());
+    TEST_ASSERT_FALSE(f.hooks.enabled);
+    TEST_ASSERT_EQUAL_INT(0, f.hooks.enable_calls);  // hook never fired
+}
+
+static void test_inhibit_still_allows_enable_off() {
+    Fixture f(arm::kBench3Dof);
+    f.hooks.enabled = true;
+    f.hooks.inhibit = true;  // pin opens while running
+
+    const auto doc = call(f.proto, R"({"cmd":"enable","on":false})");
+    TEST_ASSERT_EQUAL_STRING("ack", doc["type"].as<const char*>());
+    TEST_ASSERT_FALSE(f.hooks.enabled);
+}
+
 static void test_state_json_has_correct_array_lengths() {
     Fixture f(arm::kBench3Dof);
     char out[512];
@@ -277,6 +329,10 @@ int main(int, char**) {
     RUN_TEST(test_set_trim_applies_live_and_persists);
     RUN_TEST(test_set_trim_storage_failure_still_applies_live);
     RUN_TEST(test_get_profile_shape);
+    RUN_TEST(test_stream_toggles_flag_even_while_disabled);
+    RUN_TEST(test_heap_hook_value_appears_in_state);
+    RUN_TEST(test_inhibit_enable_blocks_enable_on);
+    RUN_TEST(test_inhibit_still_allows_enable_off);
     RUN_TEST(test_state_json_has_correct_array_lengths);
     return UNITY_END();
 }
