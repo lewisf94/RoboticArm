@@ -20,7 +20,7 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
 |---|---|---|
 | `get_state` | — | one-shot reply, `type:"state"` (not `ack` — see below), `id` echoed if sent |
 | `get_profile` | — | see shape below |
-| `enable` | `on: bool` | `on:true` attaches outputs at current targets; `false` detaches |
+| `enable` | `on: bool` | `on:true` attaches outputs at current targets; `false` detaches (always allowed). While the physical e-stop input is open, `on:true` → `err disabled` / msg `estop pin active` (T05) |
 | `estop` | — | immediate detach; requires `enable` to re-arm; always acked |
 | `set_joint` | `j:int, deg:float, vmax?:float` | single joint target; requires `enable` |
 | `set_joints` | `deg:[float…]` (null = leave) | multi-joint, synchronized arrival; `deg` length must equal joint count; requires `enable` |
@@ -35,7 +35,7 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
 | `list_poses` / `delete_pose` | — / `name` | |
 | `save_seq` | `name:str, steps:[{pose:str, dur:int, dwell:int}…], loop:bool` | |
 | `run_seq` / `stop_seq` / `list_seqs` / `delete_seq` | `name` / — / — / `name` | |
-| `stream` | `on: bool` | serial-only: toggles 10 Hz state lines |
+| `stream` | `on: bool` | serial-only: toggles 10 Hz `state` lines (implemented T05; allowed while disabled — it's read-only telemetry. The WS transport must reject it when it lands in T07) |
 | `wifi_set` | `ssid,pass` | serial-only (never over WS); reboots into STA |
 
 ## Telemetry / handshake payloads
@@ -52,7 +52,7 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
  "tgt":[45.0,20.0,-30.0],        // final targets
  "pose":{"x":180.1,"y":0.0,"z":62.3,"pitch":0.0},   // FK of j; null before M4
  "seq":{"name":"demo","step":2,"playing":true},      // null when idle
- "heap":123456}
+ "heap":123456}                                      // free heap bytes on-device; 0 in host tests without a heap hook
 
 // reply to get_profile
 {"type":"ack","cmd":"get_profile",

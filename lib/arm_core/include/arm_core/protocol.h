@@ -24,12 +24,17 @@ public:
     // passes ctx through to a callback, never dereferences it itself, so a
     // caller with no per-callback state (e.g. firmware driving a single
     // global MotionController) can leave it null.
+    // Field order note: new hooks are appended AFTER ctx so older 5-field
+    // aggregate initializers keep compiling (missing trailing members
+    // value-initialize to nullptr).
     struct SystemHooks {
         bool* enabled;                                           // shared with the firmware's tick loop
         void (*on_enable)(bool on, void* ctx);                    // attach/detach outputs
         void (*on_estop)(void* ctx);                              // immediate detach
         bool (*persist_trim)(uint8_t j, float deg, void* ctx);    // NVS write; false = storage error
         void* ctx;
+        uint32_t (*free_heap)(void* ctx);                         // bytes; null -> state reports heap:0
+        bool (*inhibit_enable)(void* ctx);                        // true while a physical e-stop forbids enable
     };
 
     // motion, profile and hooks.ctx must all outlive the Protocol.
@@ -43,6 +48,11 @@ public:
 
     // Writes the `state` telemetry message (docs/protocol.md) for time t_ms.
     size_t state_json(char* out, size_t cap, uint32_t t_ms);
+
+    // True after {"cmd":"stream","on":true}: the serial transport should emit
+    // state_json() at 10 Hz. Protocol only stores the flag - pacing and
+    // writing are the transport's job. (WS must reject `stream`: T07.)
+    bool stream() const { return stream_; }
 
 private:
     void dispatch(const char* cmd, ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
@@ -63,10 +73,12 @@ private:
     void cmd_grip(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
     void cmd_home(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
     void cmd_set_trim(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
+    void cmd_stream(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
 
     MotionController& motion_;
     const ArmProfile& profile_;
     SystemHooks hooks_;
+    bool stream_ = false;
 };
 
 }  // namespace arm

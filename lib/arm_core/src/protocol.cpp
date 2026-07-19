@@ -135,6 +135,8 @@ void Protocol::dispatch(const char* cmd, JsonDocument& in, JsonDocument& out) {
         cmd_home(in, out);
     } else if (!std::strcmp(cmd, "set_trim")) {
         cmd_set_trim(in, out);
+    } else if (!std::strcmp(cmd, "stream")) {
+        cmd_stream(in, out);
     } else {
         set_err(out, "unknown_cmd", "no such command");
     }
@@ -153,7 +155,7 @@ void Protocol::fill_state_fields(JsonDocument& out, uint32_t t_ms) {
 
     out["pose"] = nullptr;  // FK arrives in T13
     out["seq"] = nullptr;   // sequencer arrives in T11
-    out["heap"] = 0;        // firmware fills this in (or leaves it 0 natively)
+    out["heap"] = hooks_.free_heap ? hooks_.free_heap(hooks_.ctx) : 0;
 }
 
 bool Protocol::require_enabled(JsonDocument& out) {
@@ -201,6 +203,10 @@ void Protocol::cmd_enable(JsonDocument& in, JsonDocument& out) {
         return;
     }
     const bool on = in["on"];
+    if (on && hooks_.inhibit_enable && hooks_.inhibit_enable(hooks_.ctx)) {
+        set_err(out, "disabled", "estop pin active");
+        return;
+    }
     *hooks_.enabled = on;
     if (hooks_.on_enable) hooks_.on_enable(on, hooks_.ctx);
     out["type"] = "ack";
@@ -358,6 +364,16 @@ void Protocol::cmd_set_trim(JsonDocument& in, JsonDocument& out) {
         set_err(out, "storage", "trim applied but not saved");
         return;
     }
+    out["type"] = "ack";
+}
+
+// Telemetry toggle - deliberately allowed while disabled (it's read-only).
+void Protocol::cmd_stream(JsonDocument& in, JsonDocument& out) {
+    if (!in["on"].is<bool>()) {
+        set_err(out, "bad_args", "stream needs a boolean 'on'");
+        return;
+    }
+    stream_ = in["on"];
     out["type"] = "ack";
 }
 
