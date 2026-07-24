@@ -1,0 +1,165 @@
+<?xml version="1.0"?>
+<!--
+  bench_arm: URDF of the bench-rig profile (bench_3dof).
+
+  Geometry constants mirror lib/arm_core/include/arm_core/profiles/bench_3dof.h
+  (Profile A in docs/kinematics.md) - change both together or neither.
+  The device world is degrees/millimetres; the ROS world is radians/metres,
+  and the conversion happens HERE and nowhere else (CLAUDE.md rule).
+
+  Frames per docs/kinematics.md: X forward, Z up, origin at the yaw axis on
+  the mounting surface. Joint names match the ArmProfile joint names exactly
+  ("base", "shoulder", "grip") so /joint_states from the T24 bridge drives
+  this model with no remapping.
+
+  Built-in self-check (the "straight out" golden vector): with every joint at
+  zero, the tool_link origin must sit at x=0.260, y=0, z=0.060 m.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="bench_arm">
+
+  <!-- mm -> m at the boundary -->
+  <xacro:property name="base_h" value="${60/1000}"/>
+  <xacro:property name="r_off"  value="${0/1000}"/>
+  <xacro:property name="L1"     value="${120/1000}"/>
+  <xacro:property name="L2"     value="${140/1000}"/>
+
+  <material name="dark"><color rgba="0.25 0.25 0.28 1"/></material>
+  <material name="orange"><color rgba="0.90 0.45 0.10 1"/></material>
+  <material name="grey"><color rgba="0.60 0.60 0.62 1"/></material>
+
+  <!-- Pedestal, fixed to the table -->
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0.01"/>
+      <geometry><cylinder radius="0.035" length="0.02"/></geometry>
+      <material name="dark"/>
+    </visual>
+    <!-- Placeholder mass properties (not measured) - just enough for tools
+         downstream of RViz (Gazebo/MoveIt, M9 backlog) to have something
+         non-degenerate to work with. -->
+    <inertial>
+      <origin xyz="0 0 0.01"/>
+      <mass value="0.15"/>
+      <inertia ixx="0.000051" ixy="0" ixz="0" iyy="0.000051" iyz="0" izz="0.000092"/>
+    </inertial>
+  </link>
+
+  <!-- q0: yaw about Z, CCW positive viewed from above -->
+  <joint name="base" type="revolute">
+    <parent link="base_link"/>
+    <child link="yaw_link"/>
+    <origin xyz="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${radians(-90)}" upper="${radians(90)}" effort="1.0" velocity="${radians(120)}"/>
+  </joint>
+
+  <link name="yaw_link">
+    <visual>
+      <origin xyz="0 0 ${base_h/2}"/>
+      <geometry><cylinder radius="0.02" length="${base_h}"/></geometry>
+      <material name="grey"/>
+    </visual>
+    <inertial>
+      <origin xyz="0 0 ${base_h/2}"/>
+      <mass value="0.04"/>
+      <inertia ixx="0.000016" ixy="0" ixz="0" iyy="0.000016" iyz="0" izz="0.000008"/>
+    </inertial>
+  </link>
+
+  <!-- q1: shoulder pitch, 0 = horizontal, positive = up.
+       Axis is -Y: a right-hand rotation about +Y tilts +X downward, so the
+       sign flip makes positive q1 lift the arm, per docs/kinematics.md. -->
+  <joint name="shoulder" type="revolute">
+    <parent link="yaw_link"/>
+    <child link="upper_arm"/>
+    <origin xyz="${r_off} 0 ${base_h}"/>
+    <axis xyz="0 -1 0"/>
+    <limit lower="${radians(0)}" upper="${radians(120)}" effort="1.0" velocity="${radians(120)}"/>
+  </joint>
+
+  <link name="upper_arm">
+    <visual>
+      <origin xyz="${L1/2} 0 0"/>
+      <geometry><box size="${L1} 0.024 0.024"/></geometry>
+      <material name="orange"/>
+    </visual>
+    <inertial>
+      <origin xyz="${L1/2} 0 0"/>
+      <mass value="0.05"/>
+      <inertia ixx="0.0000048" ixy="0" ixz="0" iyy="0.0000624" iyz="0" izz="0.0000624"/>
+    </inertial>
+  </link>
+
+  <!-- The bench rig has no elbow servo: the forearm is rigidly straight
+       (q2 = 0). Kept as its own fixed joint so a future arm with a real
+       elbow only flips this to revolute. -->
+  <joint name="elbow_fixed" type="fixed">
+    <parent link="upper_arm"/>
+    <child link="forearm"/>
+    <origin xyz="${L1} 0 0"/>
+  </joint>
+
+  <link name="forearm">
+    <visual>
+      <origin xyz="${L2/2} 0 0"/>
+      <geometry><box size="${L2} 0.018 0.018"/></geometry>
+      <material name="orange"/>
+    </visual>
+    <inertial>
+      <origin xyz="${L2/2} 0 0"/>
+      <mass value="0.04"/>
+      <inertia ixx="0.0000022" ixy="0" ixz="0" iyy="0.0000664" iyz="0" izz="0.0000664"/>
+    </inertial>
+  </link>
+
+  <!-- Tool point: the (x, y, z) that docs/kinematics.md FK/IK talks about. -->
+  <joint name="tool_fixed" type="fixed">
+    <parent link="forearm"/>
+    <child link="tool_link"/>
+    <origin xyz="${L2} 0 0"/>
+  </joint>
+
+  <link name="tool_link">
+    <!-- palm -->
+    <visual>
+      <origin xyz="0.005 0 0"/>
+      <geometry><box size="0.01 0.05 0.02"/></geometry>
+      <material name="dark"/>
+    </visual>
+    <!-- fixed jaw, +Y side -->
+    <visual>
+      <origin xyz="0.03 0.02 0"/>
+      <geometry><box size="0.04 0.008 0.015"/></geometry>
+      <material name="grey"/>
+    </visual>
+    <inertial>
+      <origin xyz="0 0 0"/>
+      <mass value="0.03"/>
+      <inertia ixx="0.00001" ixy="0" ixz="0" iyy="0.0000073" iyz="0" izz="0.0000153"/>
+    </inertial>
+  </link>
+
+  <!-- grip: decorative jaw. 0 deg = open, 60 deg = swung toward the fixed
+       jaw = closed, mirroring the device mapping (grip pct 100 = max_deg). -->
+  <joint name="grip" type="revolute">
+    <parent link="tool_link"/>
+    <child link="jaw"/>
+    <origin xyz="0.01 -0.02 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${radians(0)}" upper="${radians(60)}" effort="1.0" velocity="${radians(120)}"/>
+  </joint>
+
+  <link name="jaw">
+    <visual>
+      <origin xyz="0.02 0 0"/>
+      <geometry><box size="0.04 0.008 0.015"/></geometry>
+      <material name="grey"/>
+    </visual>
+    <inertial>
+      <origin xyz="0.02 0 0"/>
+      <mass value="0.01"/>
+      <inertia ixx="0.00000024" ixy="0" ixz="0" iyy="0.00000152" iyz="0" izz="0.00000139"/>
+    </inertial>
+  </link>
+
+</robot>

@@ -31,3 +31,33 @@ jobs:
 
       - name: Firmware build (esp32s3)
         run: pio run -e esp32s3
+
+  ros2:
+    runs-on: ubuntu-latest
+    container: ros:jazzy-ros-base
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ROS 2 build + URDF tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            liburdfdom-tools \
+            ros-jazzy-xacro
+          rm -rf /var/lib/apt/lists/*
+
+      - name: colcon build
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          cd ros2
+          colcon build
+
+      - name: Expand xacro and validate URDF
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source ros2/install/setup.bash
+          xacro ros2/arm_description/urdf/bench_arm.urdf.xacro > /tmp/bench_arm.urdf
+          check_urdf /tmp/bench_arm.urdf
