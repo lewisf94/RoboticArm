@@ -2,6 +2,18 @@
 
 Running diary — newest first. Agents append a short dated entry per completed task; the human adds hardware notes.
 
+## 2026-07-24 — T24: ROS 2 serial bridge node
+
+- New `ros2/arm_bridge` (ament_python): `protocol_codec.py` (pure Python — parses `state`/`hello`/`ack`/`err`, builds commands, owns every deg↔rad and mm↔m conversion), `serial_transport.py` (pyserial line framing behind a 3-method interface), `bridge.py` (the rclpy node), 46 pytest cases, README.
+- **First ROS-side task with real local verification.** The task's insistence that the codec import neither rclpy nor serial paid off exactly as intended: `pip install pytest` and the whole suite runs here, no ROS needed — 46/46 green. Added an AST check that the codec stays import-pure, so the property can't rot silently.
+- For the node itself (rclpy unavailable here) reused the T04 Arduino-stub trick one level up: stubbed `rclpy`/`sensor_msgs`/`std_msgs`/`std_srvs`, wrote a `FakeDevice` mimicking the firmware's request/reply behaviour, and drove the *real* `BridgeNode` through 32 behavioural checks — handshake ordering, radians conversion, edge-triggered `/arm/enabled`, target coalescing, disconnect/reconnect, malformed-line resilience, joint-count mismatch. All 32 passed. Scratch-only; not committed.
+- Design decisions worth recording, all verified by those checks:
+  - **Single-threaded on purpose.** Service handlers wait for their ack by reusing the same serial drain loop the poll timer uses (`_send_and_wait`), so they get true ack/err feedback (e.g. `/arm/enable` surfaces "estop pin active") with no executor/callback-group concurrency to deadlock — worth avoiding given no rclpy runtime here to test against.
+  - **Targets are coalesced, not dropped.** Rate-limiting by discarding would leave the arm short of its final commanded pose; the newest target is retained and sent when the interval elapses.
+  - **E-stop clears any pending target**, so a throttled command can't be pushed at an arm that was just stopped. Explicitly checked.
+  - **Nothing is republished while disconnected** — a stale-but-live-looking model is worse than one that visibly stops.
+- CI `ros2` job gains `colcon test` (+ `python3-pytest`/`python3-serial`). Verified: codec 46/46 locally, node 32/32 against the fake device, CI YAML valid, `pio test -e native` unaffected (46/46). **Not verified: the CI job itself (checking after push) and all (hardware) items — no device or ROS 2 install in this session.**
+
 ## 2026-07-19 — T23: ROS 2 arm_description (URDF + RViz)
 
 - New `ros2/arm_description` package: `bench_arm.urdf.xacro` (base yaw + shoulder pitch, revolute; forearm rigid via a `fixed` elbow_fixed joint since the bench rig has no elbow servo; grip jaw revolute, decorative), `launch/view.launch.py` (robot_state_publisher + joint_state_publisher_gui + rviz2), `rviz/arm.rviz`, README. Geometry constants (base_h/L1/L2, joint limits) copied from `bench_3dof.h` with source comments, converted mm→m and deg→rad only inside the xacro (`${.../1000}`, `${radians(...)}`).

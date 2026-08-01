@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>arm_bridge</name>
+  <version>0.1.0</version>
+  <description>ROS 2 &lt;-&gt; RoboticArm serial bridge: speaks docs/protocol.md over USB on one side, standard topics/services on the other. Translator only - all motion, limit and safety logic lives in arm_core on the device.</description>
+  <maintainer email="lewisfowler94@gmail.com">Lewis Fowler</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <exec_depend>python3-serial</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
