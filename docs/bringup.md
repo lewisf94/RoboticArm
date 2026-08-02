@@ -1,14 +1,14 @@
 # Bench bring-up guide
 
 Everything waiting on real hardware, in the order to do it. This consolidates
-the **(hardware)** acceptance items from tasks T04, T05, T06, T23, T24 and
-T25 — those task files stay the source of truth; this is the version you can
-actually work through at a desk.
+the **(hardware)** acceptance items from tasks T04, T05, T06, T07, T23, T24
+and T25 — those task files stay the source of truth; this is the version you
+can actually work through at a desk.
 
 Stages 1–3 need only the ESP32 and one servo. Stage 4 additionally needs a
-WiFi network (or just a phone to check the AP appears). Stage 5 needs no
-hardware at all. Budget ~90 minutes for the lot, less if the wiring is
-already done.
+WiFi network (or just a phone to check the AP appears). Stage 5 needs Stage
+4 done plus a browser and (optionally) `websocat`. Stage 6 needs no hardware
+at all. Budget ~100 minutes for the lot, less if the wiring is already done.
 
 ---
 
@@ -48,7 +48,8 @@ GPIO 10 it refuses to enable and looks broken. **Fit a jumper wire from GPIO
 - 5–6 V supply, ≥3 A for one MG996R (bench supply is ideal)
 - 2200–4700 µF capacitor across the servo rail, near the servos
 - Jumper wire (GPIO 10 → GND) or an e-stop switch
-- Later stages: the other servos, a machine with ROS 2 Jazzy
+- Later stages: the other servos, a browser, optionally
+  [websocat](https://github.com/vi/websocat), a machine with ROS 2 Jazzy
 
 ---
 
@@ -203,7 +204,45 @@ password.
 
 ---
 
-## Stage 5 — ROS 2 model, no hardware  *(task T23)*
+## Stage 5 — Web UI placeholder over WiFi  *(task T07)*
+
+Needs Stage 4 done (device joined to your WiFi, `roboarm.local` resolving).
+
+**Browser.** Open `http://roboarm.local` on a machine on the same network:
+
+☐ Page loads "RoboArm — UI arrives in T08", and within ~100ms the `<pre>`
+below it fills in with live JSON (`t`, `en`, `j`, `tgt`, `heap`, `wifi`, ...)
+ticking at 10 Hz. (This placeholder just proves the pipe — the real sliders
+land in T08.)
+
+**WebSocket round-trip.** From a machine with
+[websocat](https://github.com/vi/websocat):
+
+```bash
+websocat ws://roboarm.local/ws
+{"cmd":"get_state"}
+```
+
+| Check | Expected |
+|---|---|
+| ☐ connect | a `hello` line arrives immediately, then `state` lines at ~10 Hz with no `stream` command needed |
+| ☐ send `get_state` | one extra `state` reply on top of the broadcast stream |
+| ☐ send `{"cmd":"wifi_set","ssid":"x","pass":"y"}` | rejected: `{"type":"err",...,"code":"bad_args","msg":"serial-only command"}` — WS must never be able to trigger a reboot |
+| ☐ send `{"cmd":"stream","on":true}` | rejected the same way — WS already streams unconditionally, and this flag is shared with the serial console |
+
+**Multiple clients + disconnect safety.** Open the browser page in two tabs
+at once, and get the arm moving (a `set_joint` over serial, or a slow `home`,
+works well since it takes a couple of seconds):
+
+| Check | Expected |
+|---|---|
+| ☐ both tabs update simultaneously | same numbers, same ~10 Hz rate |
+| ☐ close one tab mid-move | the other tab keeps streaming and the arm keeps moving to its target — a disconnect must never pause, hold early, or cancel motion |
+| ☐ open a 5th concurrent client (e.g. 2 browser tabs + 3 `websocat` sessions) | the oldest connection gets closed to enforce the 4-client cap; the 4 newest keep streaming uninterrupted |
+
+---
+
+## Stage 6 — ROS 2 model, no hardware  *(task T23)*
 
 Do this bit anywhere, even with the arm unplugged and boxed.
 
@@ -228,7 +267,7 @@ ros2 run tf2_ros tf2_echo base_link tool_link      # with all sliders at 0
 
 ---
 
-## Stage 6 — Bridge the real arm into ROS 2  *(task T24)*
+## Stage 7 — Bridge the real arm into ROS 2  *(task T24)*
 
 Arm plugged in, jumper/switch fitted. Find the port with `ls /dev/ttyACM*`.
 
@@ -255,7 +294,7 @@ ros2 service call /arm/estop std_srvs/srv/Trigger
 
 ---
 
-## Stage 7 — The whole thing  *(task T25)*
+## Stage 8 — The whole thing  *(task T25)*
 
 ```bash
 ros2 launch arm_bringup bench.launch.py            # add port:=/dev/ttyACM1 if needed
@@ -267,6 +306,11 @@ ros2 launch arm_bringup bench.launch.py            # add port:=/dev/ttyACM1 if n
 | ☐ `ros2 run arm_bringup wave_demo` sweeps the shoulder smoothly | 40°–80°, no stepping |
 | ☐ Ctrl-C on the demo e-stops the arm | goes limp, doesn't just stop publishing |
 | ☐ T23's slider GUI still works standalone | run `view.launch.py` **on its own** — not at the same time as this launch, they'd fight over `/joint_states` |
+
+Also worth a quick look here: the browser UI from Stage 5 and this ROS 2
+bringup can run at the same time (they're independent WS/serial clients of
+the same device) — the 4-client cap counts WS connections only, ROS 2's
+serial bridge doesn't compete with it.
 
 Remember: **RViz shows commanded angles, not measured ones.** Hobby servos
 have no feedback. If a servo stalls or loses power the model will still show
@@ -287,6 +331,8 @@ model.
 | `set_trim` → `"disabled"` | trims need `enable` first |
 | `wifi_set` acked but device never reconnects | check the credentials — a wrong password looks identical to "still connecting" for the first 15s |
 | `RoboArm-Setup` never appears | give it a few seconds after boot; if it never shows even after 15s+, check the serial log for what `wifi_set` actually stored |
+| `http://roboarm.local` times out | mDNS can be flaky on some routers/OSes — try the IP from `get_state`'s `wifi.ip`, or the `# wifi: STA connected, ip=...` line on serial, directly |
+| Page loads but the `<pre>` stays stuck on "connecting…" | check the serial monitor for `# web: LittleFS mount failed` — usually means `python scripts/sync_web.py && pio run -e esp32s3 -t uploadfs` was never run |
 | `colcon build` can't find packages | run it from `ros2/`, and `source install/setup.bash` after |
 | `/joint_states` silent | bridge can't open the port — check `ls /dev/ttyACM*`, and that you're in the `dialout` group |
 
@@ -303,9 +349,10 @@ anything surprising.
 | 2 — first motion (T04) | | |
 | 3 — e-stop, trims, telemetry (T05) | | |
 | 4 — WiFi (T06) | | |
-| 5 — RViz model (T23) | | |
-| 6 — bridge (T24) | | |
-| 7 — bringup + demo (T25) | | |
+| 5 — web UI placeholder (T07) | | |
+| 6 — RViz model (T23) | | |
+| 7 — bridge (T24) | | |
+| 8 — bringup + demo (T25) | | |
 
 When a stage passes, tick its **(hardware)** box in the matching
 `tasks/T##-*.md` file too.

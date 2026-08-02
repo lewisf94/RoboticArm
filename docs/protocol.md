@@ -14,6 +14,11 @@ Device-initiated: `{"type":"hello",…}` on connect, `{"type":"state",…}` tele
 
 Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint limit) · `unreachable` (IK) · `disabled` (motion while not enabled) · `busy` (sequence running) · `not_found` · `storage` .
 
+## Transports
+
+- **WebSocket** (`src/web_server`, T07): `hello` sent immediately on connect; `state` broadcast to every connected client at 10 Hz unconditionally (not gated by `stream` — see that command's row below). Capped at 4 concurrent clients — a 5th connection closes the oldest. A client disconnecting (cap eviction or otherwise) never touches motion: targets hold, `enabled` is untouched (docs/architecture.md safety model).
+- **USB serial** (`src/main.cpp`, T04/T05): `hello` on boot; `state` lines only while `stream:true` (per-connection concept doesn't apply — one UART).
+
 ## Commands
 
 | cmd | args | notes |
@@ -35,8 +40,8 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
 | `list_poses` / `delete_pose` | — / `name` | |
 | `save_seq` | `name:str, steps:[{pose:str, dur:int, dwell:int}…], loop:bool` | |
 | `run_seq` / `stop_seq` / `list_seqs` / `delete_seq` | `name` / — / — / `name` | |
-| `stream` | `on: bool` | serial-only: toggles 10 Hz `state` lines (implemented T05; allowed while disabled — it's read-only telemetry. The WS transport must reject it when it lands in T07) |
-| `wifi_set` | `ssid:str, pass:str` (both required; `pass:""` = open network) | serial-only (**the WS transport must reject it — T07, not yet implemented**); persists to NVS, acks, then reboots ~500ms later into STA. `ssid` 1–32 chars, `pass` ≤64 chars, else `bad_args`. Not gated on `enable` — it's network config, not motion (implemented T06) |
+| `stream` | `on: bool` | serial-only: toggles 10 Hz `state` lines (implemented T05; allowed while disabled — it's read-only telemetry). **Rejected over WS** (`err bad_args`, T07) — WS already gets `state` pushed at 10 Hz unconditionally (see below), and `stream`'s on/off flag is shared across both transports, so a WS client toggling it would silently start or stop a human's serial console telemetry |
+| `wifi_set` | `ssid:str, pass:str` (both required; `pass:""` = open network) | serial-only, **rejected over WS** (`err bad_args`, T07) — it reboots the device into whatever network it's just been told to join, including possibly off of the network the WS client is on; persists to NVS, acks, then reboots ~500ms later into STA. `ssid` 1–32 chars, `pass` ≤64 chars, else `bad_args`. Not gated on `enable` — it's network config, not motion (implemented T06) |
 
 ## Telemetry / handshake payloads
 

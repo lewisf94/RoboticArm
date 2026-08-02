@@ -3,8 +3,8 @@
 // explicit `enable` command (docs/architecture.md safety model).
 // T05: trims persisted in NVS, physical e-stop input, RGB status LED,
 // 10 Hz serial telemetry via the `stream` command.
-// T06: WiFi (STA with AP fallback, mDNS) and `wifi_set`. WS transport (T07)
-// still pending.
+// T06: WiFi (STA with AP fallback, mDNS) and `wifi_set`.
+// T07: HTTP + WebSocket transport (web_server), serving web/ from LittleFS.
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -15,6 +15,7 @@
 #include "arm_core/version.h"
 #include "arm_hal/ledc_servo_output.h"
 #include "pins.h"
+#include "web_server.h"
 #include "wifi_manager.h"
 
 namespace {
@@ -253,6 +254,7 @@ void setup() {
                   ARM_FW_VERSION, ARM_PROTO_VERSION, profile.name, profile.n_joints);
 
     wifi_manager::begin();  // non-blocking: kicks off STA/AP, poll() drives it from loop()
+    web_server::begin(protocol, profile);
 
     last_tick_ms = millis();
 }
@@ -263,6 +265,7 @@ void loop() {
     const uint32_t now = millis();
     poll_estop(now);
     wifi_manager::poll(now);
+    web_server::poll(now);
 
     const uint32_t dt = now - last_tick_ms;
     if (dt >= kTickIntervalMs) {

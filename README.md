@@ -67,6 +67,8 @@ pip install platformio
 pio test -e native          # run core unit tests, no hardware needed
 pio run  -e esp32s3         # compile firmware
 pio run  -e esp32s3 -t upload && pio device monitor   # flash + watch (hardware)
+
+python scripts/sync_web.py && pio run -e esp32s3 -t uploadfs   # (re)flash the web UI (hardware)
 ```
 
 ## Agent-driven development
