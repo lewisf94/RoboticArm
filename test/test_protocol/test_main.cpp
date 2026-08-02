@@ -1,6 +1,9 @@
 // Native unit tests for arm_core Protocol.
 // Run: pio test -e native
 
+#include <cstdio>
+#include <cstring>
+
 #include <ArduinoJson.h>
 #include <unity.h>
 
@@ -23,6 +26,16 @@ struct TestHooks {
     float last_trim_deg = 0.0f;
     bool persist_should_fail = false;
     bool inhibit = false;  // simulates the physical e-stop pin being open
+
+    int wifi_creds_calls = 0;
+    char last_ssid[40] = "";
+    char last_pass[80] = "";
+    bool wifi_creds_should_fail = false;
+
+    int reboot_calls = 0;
+    uint32_t last_reboot_delay_ms = 0;
+
+    arm::Protocol::WifiInfo wifi_info_to_return;
 };
 
 void on_enable_cb(bool on, void* ctx) {
@@ -49,6 +62,24 @@ uint32_t free_heap_cb(void*) { return kFakeHeapBytes; }
 
 bool inhibit_enable_cb(void* ctx) { return static_cast<TestHooks*>(ctx)->inhibit; }
 
+bool set_wifi_creds_cb(const char* ssid, const char* pass, void* ctx) {
+    auto* h = static_cast<TestHooks*>(ctx);
+    h->wifi_creds_calls++;
+    std::snprintf(h->last_ssid, sizeof(h->last_ssid), "%s", ssid);
+    std::snprintf(h->last_pass, sizeof(h->last_pass), "%s", pass);
+    return !h->wifi_creds_should_fail;
+}
+
+void request_reboot_cb(uint32_t delay_ms, void* ctx) {
+    auto* h = static_cast<TestHooks*>(ctx);
+    h->reboot_calls++;
+    h->last_reboot_delay_ms = delay_ms;
+}
+
+arm::Protocol::WifiInfo wifi_info_cb(void* ctx) {
+    return static_cast<TestHooks*>(ctx)->wifi_info_to_return;
+}
+
 struct Fixture {
     arm::MotionController motion;
     TestHooks hooks;
@@ -58,7 +89,19 @@ struct Fixture {
         : motion(profile),
           proto(motion, profile,
                 arm::Protocol::SystemHooks{&hooks.enabled, on_enable_cb, on_estop_cb, persist_trim_cb,
-                                            &hooks, free_heap_cb, inhibit_enable_cb}) {}
+                                            &hooks, free_heap_cb, inhibit_enable_cb, set_wifi_creds_cb,
+                                            request_reboot_cb, wifi_info_cb}) {}
+};
+
+// A second fixture with every optional hook left null, to prove none of them
+// are ever dereferenced directly (only ever called through a null check).
+struct BareFixture {
+    arm::MotionController motion;
+    bool enabled = false;
+    arm::Protocol proto;
+
+    explicit BareFixture(const arm::ArmProfile& profile)
+        : motion(profile), proto(motion, profile, arm::Protocol::SystemHooks{&enabled}) {}
 };
 
 // Calls handle_line and parses the reply with the library's own (default,
@@ -294,6 +337,123 @@ static void test_inhibit_still_allows_enable_off() {
     TEST_ASSERT_FALSE(f.hooks.enabled);
 }
 
+static void test_wifi_set_happy_path_persists_and_reboots() {
+    Fixture f(arm::kBench3Dof);
+    const auto doc = call(f.proto, R"({"cmd":"wifi_set","ssid":"MyNetwork","pass":"hunter2"})");
+    TEST_ASSERT_EQUAL_STRING("ack", doc["type"].as<const char*>());
+    TEST_ASSERT_EQUAL_INT(1, f.hooks.wifi_creds_calls);
+    TEST_ASSERT_EQUAL_STRING("MyNetwork", f.hooks.last_ssid);
+    TEST_ASSERT_EQUAL_STRING("hunter2", f.hooks.last_pass);
+    TEST_ASSERT_EQUAL_INT(1, f.hooks.reboot_calls);
+    TEST_ASSERT_EQUAL_UINT32(500, f.hooks.last_reboot_delay_ms);
+}
+
+static void test_wifi_set_allows_empty_password_for_open_networks() {
+    Fixture f(arm::kBench3Dof);
+    const auto doc = call(f.proto, R"({"cmd":"wifi_set","ssid":"OpenNet","pass":""})");
+    TEST_ASSERT_EQUAL_STRING("ack", doc["type"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("", f.hooks.last_pass);
+}
+
+static void test_wifi_set_does_not_require_enabled() {
+    Fixture f(arm::kBench3Dof);
+    TEST_ASSERT_FALSE(f.hooks.enabled);  // fresh fixture starts disabled
+    const auto doc = call(f.proto, R"({"cmd":"wifi_set","ssid":"MyNetwork","pass":"hunter2"})");
+    TEST_ASSERT_EQUAL_STRING("ack", doc["type"].as<const char*>());
+}
+
+static void test_wifi_set_missing_fields_is_bad_args() {
+    Fixture f(arm::kBench3Dof);
+    for (const char* line : {R"({"cmd":"wifi_set","ssid":"X"})", R"({"cmd":"wifi_set","pass":"X"})",
+                              R"({"cmd":"wifi_set"})"}) {
+        const auto doc = call(f.proto, line);
+        TEST_ASSERT_EQUAL_STRING("err", doc["type"].as<const char*>());
+        TEST_ASSERT_EQUAL_STRING("bad_args", doc["code"].as<const char*>());
+    }
+    TEST_ASSERT_EQUAL_INT(0, f.hooks.wifi_creds_calls);  // never reached the hook
+}
+
+static void test_wifi_set_rejects_empty_or_oversize_ssid() {
+    Fixture f(arm::kBench3Dof);
+    char long_ssid[40];
+    std::memset(long_ssid, 'a', sizeof(long_ssid) - 1);
+    long_ssid[sizeof(long_ssid) - 1] = '\0';  // 39 'a's - over the 32-char limit
+
+    ArduinoJson::JsonDocument req;
+    req["cmd"] = "wifi_set";
+    req["ssid"] = "";
+    req["pass"] = "x";
+    char line[256];
+    ArduinoJson::serializeJson(req, line, sizeof(line));
+    auto doc = call(f.proto, line);
+    TEST_ASSERT_EQUAL_STRING("bad_args", doc["code"].as<const char*>());
+
+    req["ssid"] = long_ssid;
+    ArduinoJson::serializeJson(req, line, sizeof(line));
+    doc = call(f.proto, line);
+    TEST_ASSERT_EQUAL_STRING("bad_args", doc["code"].as<const char*>());
+    TEST_ASSERT_EQUAL_INT(0, f.hooks.wifi_creds_calls);
+}
+
+static void test_wifi_set_rejects_oversize_pass() {
+    Fixture f(arm::kBench3Dof);
+    char long_pass[70];
+    std::memset(long_pass, 'b', sizeof(long_pass) - 1);
+    long_pass[sizeof(long_pass) - 1] = '\0';  // 69 'b's - over the 64-char limit
+
+    ArduinoJson::JsonDocument req;
+    req["cmd"] = "wifi_set";
+    req["ssid"] = "MyNetwork";
+    req["pass"] = long_pass;
+    char line[256];
+    ArduinoJson::serializeJson(req, line, sizeof(line));
+    const auto doc = call(f.proto, line);
+    TEST_ASSERT_EQUAL_STRING("bad_args", doc["code"].as<const char*>());
+    TEST_ASSERT_EQUAL_INT(0, f.hooks.wifi_creds_calls);
+}
+
+static void test_wifi_set_storage_failure_does_not_reboot() {
+    Fixture f(arm::kBench3Dof);
+    f.hooks.wifi_creds_should_fail = true;
+    const auto doc = call(f.proto, R"({"cmd":"wifi_set","ssid":"MyNetwork","pass":"hunter2"})");
+    TEST_ASSERT_EQUAL_STRING("err", doc["type"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("storage", doc["code"].as<const char*>());
+    TEST_ASSERT_EQUAL_INT(0, f.hooks.reboot_calls);  // must not reboot away from a failed save
+}
+
+static void test_wifi_info_appears_in_state() {
+    Fixture f(arm::kBench3Dof);
+    f.hooks.wifi_info_to_return = arm::Protocol::WifiInfo{"sta", "192.168.1.42", -55};
+
+    const auto doc = call(f.proto, R"({"cmd":"get_state"})");
+    TEST_ASSERT_EQUAL_STRING("sta", doc["wifi"]["mode"].as<const char*>());
+    TEST_ASSERT_EQUAL_STRING("192.168.1.42", doc["wifi"]["ip"].as<const char*>());
+    TEST_ASSERT_EQUAL_INT(-55, doc["wifi"]["rssi"].as<int>());
+}
+
+static void test_wifi_info_null_when_hook_absent() {
+    BareFixture f(arm::kBench3Dof);
+    char out[512];
+    f.proto.state_json(out, sizeof(out), 0);
+    ArduinoJson::JsonDocument doc;
+    ArduinoJson::deserializeJson(doc, out);
+    TEST_ASSERT_TRUE(doc["wifi"].isNull());
+}
+
+static void test_bare_fixture_survives_every_command_with_all_hooks_null() {
+    // Every optional hook is null; nothing here may crash regardless of
+    // outcome - that's the whole point of hooks being nullable.
+    BareFixture f(arm::kBench3Dof);
+    call(f.proto, R"({"cmd":"get_state"})");
+    call(f.proto, R"({"cmd":"get_profile"})");
+    call(f.proto, R"({"cmd":"enable","on":true})");
+    call(f.proto, R"({"cmd":"set_joint","j":0,"deg":10})");
+    call(f.proto, R"({"cmd":"set_trim","j":0,"deg":1})");
+    call(f.proto, R"({"cmd":"wifi_set","ssid":"X","pass":"Y"})");
+    call(f.proto, R"({"cmd":"estop"})");
+    TEST_ASSERT_TRUE(true);  // reaching this line without crashing is the assertion
+}
+
 static void test_state_json_has_correct_array_lengths() {
     Fixture f(arm::kBench3Dof);
     char out[512];
@@ -329,6 +489,16 @@ int main(int, char**) {
     RUN_TEST(test_set_trim_applies_live_and_persists);
     RUN_TEST(test_set_trim_storage_failure_still_applies_live);
     RUN_TEST(test_get_profile_shape);
+    RUN_TEST(test_wifi_set_happy_path_persists_and_reboots);
+    RUN_TEST(test_wifi_set_allows_empty_password_for_open_networks);
+    RUN_TEST(test_wifi_set_does_not_require_enabled);
+    RUN_TEST(test_wifi_set_missing_fields_is_bad_args);
+    RUN_TEST(test_wifi_set_rejects_empty_or_oversize_ssid);
+    RUN_TEST(test_wifi_set_rejects_oversize_pass);
+    RUN_TEST(test_wifi_set_storage_failure_does_not_reboot);
+    RUN_TEST(test_wifi_info_appears_in_state);
+    RUN_TEST(test_wifi_info_null_when_hook_absent);
+    RUN_TEST(test_bare_fixture_survives_every_command_with_all_hooks_null);
     RUN_TEST(test_stream_toggles_flag_even_while_disabled);
     RUN_TEST(test_heap_hook_value_appears_in_state);
     RUN_TEST(test_inhibit_enable_blocks_enable_on);

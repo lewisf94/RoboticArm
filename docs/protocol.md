@@ -36,7 +36,7 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
 | `save_seq` | `name:str, steps:[{pose:str, dur:int, dwell:int}…], loop:bool` | |
 | `run_seq` / `stop_seq` / `list_seqs` / `delete_seq` | `name` / — / — / `name` | |
 | `stream` | `on: bool` | serial-only: toggles 10 Hz `state` lines (implemented T05; allowed while disabled — it's read-only telemetry. The WS transport must reject it when it lands in T07) |
-| `wifi_set` | `ssid,pass` | serial-only (never over WS); reboots into STA |
+| `wifi_set` | `ssid:str, pass:str` (both required; `pass:""` = open network) | serial-only (**the WS transport must reject it — T07, not yet implemented**); persists to NVS, acks, then reboots ~500ms later into STA. `ssid` 1–32 chars, `pass` ≤64 chars, else `bad_args`. Not gated on `enable` — it's network config, not motion (implemented T06) |
 
 ## Telemetry / handshake payloads
 
@@ -52,7 +52,11 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
  "tgt":[45.0,20.0,-30.0],        // final targets
  "pose":{"x":180.1,"y":0.0,"z":62.3,"pitch":0.0},   // FK of j; null before M4
  "seq":{"name":"demo","step":2,"playing":true},      // null when idle
- "heap":123456}                                      // free heap bytes on-device; 0 in host tests without a heap hook
+ "heap":123456,                                      // free heap bytes on-device; 0 in host tests without a heap hook
+ "wifi":{"mode":"sta","ip":"192.168.1.42","rssi":-58}}  // null in host tests without a wifi hook (T06)
+ // wifi.mode: "off" (briefly, before first connect attempt) | "connecting" (STA attempt in
+ // progress, up to 15s) | "sta" | "ap" (RoboArm-Setup fallback). ip is "0.0.0.0" until an
+ // interface actually has one; rssi is 0 outside "sta".
 
 // reply to get_profile
 {"type":"ack","cmd":"get_profile",

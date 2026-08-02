@@ -17,16 +17,26 @@ namespace arm {
 
 class Protocol {
 public:
+    // Snapshot for the `wifi` state field (docs/protocol.md). mode/ip are
+    // borrowed pointers - the hook that returns this may point them at a
+    // static buffer (safe: Protocol consumes them immediately and
+    // ArduinoJson copies non-literal strings on assignment, never aliases).
+    struct WifiInfo {
+        const char* mode = "off";  // "off" | "connecting" | "sta" | "ap"
+        const char* ip = "0.0.0.0";
+        int rssi = 0;
+    };
+
     // Function-pointer hooks so firmware (NVS, HAL attach/detach) and tests
     // can plug in without arm_core depending on any platform headers.
     // `enabled` is required (never null) - Protocol dereferences it directly.
-    // `ctx` and the three callbacks may all be null: Protocol only ever
-    // passes ctx through to a callback, never dereferences it itself, so a
-    // caller with no per-callback state (e.g. firmware driving a single
-    // global MotionController) can leave it null.
-    // Field order note: new hooks are appended AFTER ctx so older 5-field
-    // aggregate initializers keep compiling (missing trailing members
-    // value-initialize to nullptr).
+    // `ctx` and every callback may be null: Protocol only ever passes ctx
+    // through to a callback, never dereferences it itself, so a caller with
+    // no per-callback state (e.g. firmware driving a single global
+    // MotionController) can leave any of them null.
+    // Field order note: new hooks are appended AFTER ctx so older aggregate
+    // initializers keep compiling (missing trailing members value-initialize
+    // to nullptr).
     struct SystemHooks {
         bool* enabled;                                           // shared with the firmware's tick loop
         void (*on_enable)(bool on, void* ctx);                    // attach/detach outputs
@@ -35,6 +45,9 @@ public:
         void* ctx;
         uint32_t (*free_heap)(void* ctx);                         // bytes; null -> state reports heap:0
         bool (*inhibit_enable)(void* ctx);                        // true while a physical e-stop forbids enable
+        bool (*set_wifi_creds)(const char* ssid, const char* pass, void* ctx);  // NVS write; false = storage error
+        void (*request_reboot)(uint32_t delay_ms, void* ctx);     // schedule a reboot; never blocks
+        WifiInfo (*wifi_info)(void* ctx);                          // null -> state reports wifi:null
     };
 
     // motion, profile and hooks.ctx must all outlive the Protocol.
@@ -74,6 +87,11 @@ private:
     void cmd_home(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
     void cmd_set_trim(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
     void cmd_stream(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
+    // Never gated on enabled (pure config). Serial-only per docs/protocol.md
+    // - enforcing that is the WS transport's job once it exists (T07); this
+    // dispatcher is transport-agnostic and has no way to know which one
+    // called it, so it cannot enforce that rule itself.
+    void cmd_wifi_set(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
 
     MotionController& motion_;
     const ArmProfile& profile_;

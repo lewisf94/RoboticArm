@@ -1,12 +1,14 @@
 # Bench bring-up guide
 
 Everything waiting on real hardware, in the order to do it. This consolidates
-the **(hardware)** acceptance items from tasks T04, T05, T23, T24 and T25 —
-those task files stay the source of truth; this is the version you can
+the **(hardware)** acceptance items from tasks T04, T05, T06, T23, T24 and
+T25 — those task files stay the source of truth; this is the version you can
 actually work through at a desk.
 
-Stages 1–3 need only the ESP32 and one servo. Stage 4 needs no hardware at
-all. Budget ~an hour for the lot, less if the wiring is already done.
+Stages 1–3 need only the ESP32 and one servo. Stage 4 additionally needs a
+WiFi network (or just a phone to check the AP appears). Stage 5 needs no
+hardware at all. Budget ~90 minutes for the lot, less if the wiring is
+already done.
 
 ---
 
@@ -159,7 +161,49 @@ trim surviving in flash.
 
 ---
 
-## Stage 4 — ROS 2 model, no hardware  *(task T23)*
+## Stage 4 — WiFi  *(task T06)*
+
+**Fresh flash → AP appears.** After Stage 2/3's flash, before ever sending
+`wifi_set`, check your phone's WiFi list:
+
+☐ Network **`RoboArm-Setup`** appears (password `roboarm123`). That's the
+device with no stored credentials, serving its fallback AP — correct and
+expected on a fresh flash.
+
+**Join your real network.** Back in the serial monitor:
+
+```json
+{"cmd":"wifi_set","ssid":"YourNetworkName","pass":"YourPassword"}
+```
+
+| Check | Expected |
+|---|---|
+| ☐ acked | `{"type":"ack","cmd":"wifi_set"}` |
+| ☐ device reboots ~500ms later | you'll see the boot `hello` line again |
+| ☐ boots into STA | `# wifi: connecting STA to YourNetworkName` then `# wifi: STA connected, ip=...` in the monitor |
+| ☐ `ping roboarm.local` from another machine on the same network | replies |
+| ☐ servo control unaffected throughout | re-run a `set_joint` from Stage 2 — WiFi connecting must not stall motion or serial |
+
+**Wrong password → falls back to AP after 15s.** Re-run `wifi_set` with a
+deliberately wrong password, wait it out:
+
+☐ `# wifi: STA connect timed out, falling back to AP` appears ~15s after
+reboot, and `RoboArm-Setup` reappears in your phone's WiFi list.
+
+```json
+{"cmd":"get_state"}
+```
+
+☐ the `wifi` object's `mode` matches what you'd expect at each stage
+(`"connecting"` right after reboot, then `"sta"` or `"ap"`), and `ip` is a
+real address once connected.
+
+To get back onto your real network, send `wifi_set` again with the correct
+password.
+
+---
+
+## Stage 5 — ROS 2 model, no hardware  *(task T23)*
 
 Do this bit anywhere, even with the arm unplugged and boxed.
 
@@ -184,7 +228,7 @@ ros2 run tf2_ros tf2_echo base_link tool_link      # with all sliders at 0
 
 ---
 
-## Stage 5 — Bridge the real arm into ROS 2  *(task T24)*
+## Stage 6 — Bridge the real arm into ROS 2  *(task T24)*
 
 Arm plugged in, jumper/switch fitted. Find the port with `ls /dev/ttyACM*`.
 
@@ -211,7 +255,7 @@ ros2 service call /arm/estop std_srvs/srv/Trigger
 
 ---
 
-## Stage 6 — The whole thing  *(task T25)*
+## Stage 7 — The whole thing  *(task T25)*
 
 ```bash
 ros2 launch arm_bringup bench.launch.py            # add port:=/dev/ttyACM1 if needed
@@ -241,6 +285,8 @@ model.
 | Servo buzzes at a hard stop | commanded past its mechanical range — add a trim, or tighten the profile limits |
 | Nothing on the serial monitor | wrong port, or wrong baud (115200) |
 | `set_trim` → `"disabled"` | trims need `enable` first |
+| `wifi_set` acked but device never reconnects | check the credentials — a wrong password looks identical to "still connecting" for the first 15s |
+| `RoboArm-Setup` never appears | give it a few seconds after boot; if it never shows even after 15s+, check the serial log for what `wifi_set` actually stored |
 | `colcon build` can't find packages | run it from `ros2/`, and `source install/setup.bash` after |
 | `/joint_states` silent | bridge can't open the port — check `ls /dev/ttyACM*`, and that you're in the `dialout` group |
 
@@ -256,9 +302,10 @@ anything surprising.
 |---|---|---|
 | 2 — first motion (T04) | | |
 | 3 — e-stop, trims, telemetry (T05) | | |
-| 4 — RViz model (T23) | | |
-| 5 — bridge (T24) | | |
-| 6 — bringup + demo (T25) | | |
+| 4 — WiFi (T06) | | |
+| 5 — RViz model (T23) | | |
+| 6 — bridge (T24) | | |
+| 7 — bringup + demo (T25) | | |
 
 When a stage passes, tick its **(hardware)** box in the matching
 `tasks/T##-*.md` file too.

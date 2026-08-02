@@ -2,7 +2,9 @@
 // output) over USB serial. Boots disabled/detached; motion requires an
 // explicit `enable` command (docs/architecture.md safety model).
 // T05: trims persisted in NVS, physical e-stop input, RGB status LED,
-// 10 Hz serial telemetry via the `stream` command. WiFi/WS arrive T06/T07.
+// 10 Hz serial telemetry via the `stream` command.
+// T06: WiFi (STA with AP fallback, mDNS) and `wifi_set`. WS transport (T07)
+// still pending.
 
 #include <Arduino.h>
 #include <Preferences.h>
@@ -13,6 +15,7 @@
 #include "arm_core/version.h"
 #include "arm_hal/ledc_servo_output.h"
 #include "pins.h"
+#include "wifi_manager.h"
 
 namespace {
 
@@ -75,9 +78,46 @@ bool inhibit_enable(void* /*ctx*/) {
     return estop_pin_active;
 }
 
+bool reboot_pending = false;
+uint32_t reboot_at_ms = 0;
+
+// Never calls ESP.restart() directly: the ack for wifi_set must reach the
+// client over serial before the device disappears, and that write happens
+// in send_reply() after handle_line() (and this hook) returns. poll_reboot()
+// does the actual restart once the delay has elapsed.
+void request_reboot(uint32_t delay_ms, void* /*ctx*/) {
+    reboot_pending = true;
+    reboot_at_ms = millis() + delay_ms;
+}
+
+bool set_wifi_creds(const char* ssid, const char* pass, void* /*ctx*/) {
+    return wifi_manager::save_creds(ssid, pass);
+}
+
+arm::Protocol::WifiInfo wifi_info(void* /*ctx*/) {
+    const wifi_manager::Status s = wifi_manager::status();
+
+    const char* mode_str = "off";
+    switch (s.mode) {
+        case wifi_manager::Mode::kConnectingSta: mode_str = "connecting"; break;
+        case wifi_manager::Mode::kSta: mode_str = "sta"; break;
+        case wifi_manager::Mode::kAp: mode_str = "ap"; break;
+        case wifi_manager::Mode::kOff: mode_str = "off"; break;
+    }
+
+    // static: outlives this call, which is all Protocol needs (it copies the
+    // string into the JSON document immediately - see protocol.cpp) but a
+    // stack buffer would not.
+    static char ip_buf[16];
+    snprintf(ip_buf, sizeof(ip_buf), "%u.%u.%u.%u", s.ip[0], s.ip[1], s.ip[2], s.ip[3]);
+
+    return arm::Protocol::WifiInfo{mode_str, ip_buf, s.rssi};
+}
+
 arm::Protocol protocol(motion, profile,
                         arm::Protocol::SystemHooks{&enabled, on_enable, on_estop, persist_trim, nullptr,
-                                                    free_heap, inhibit_enable});
+                                                    free_heap, inhibit_enable, set_wifi_creds, request_reboot,
+                                                    wifi_info});
 
 char line_buf[512];
 size_t line_len = 0;
@@ -189,6 +229,12 @@ void tick_motion(uint32_t dt_ms) {
     }
 }
 
+void poll_reboot(uint32_t now) {
+    if (reboot_pending && static_cast<int32_t>(now - reboot_at_ms) >= 0) {
+        ESP.restart();
+    }
+}
+
 }  // namespace
 
 void setup() {
@@ -205,6 +251,9 @@ void setup() {
 
     Serial.printf("{\"type\":\"hello\",\"fw\":\"%s\",\"proto\":%d,\"profile\":\"%s\",\"joints\":%d}\n",
                   ARM_FW_VERSION, ARM_PROTO_VERSION, profile.name, profile.n_joints);
+
+    wifi_manager::begin();  // non-blocking: kicks off STA/AP, poll() drives it from loop()
+
     last_tick_ms = millis();
 }
 
@@ -213,6 +262,7 @@ void loop() {
 
     const uint32_t now = millis();
     poll_estop(now);
+    wifi_manager::poll(now);
 
     const uint32_t dt = now - last_tick_ms;
     if (dt >= kTickIntervalMs) {
@@ -222,4 +272,5 @@ void loop() {
 
     stream_state(now);
     update_led(now);
+    poll_reboot(now);
 }

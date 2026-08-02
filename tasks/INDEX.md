@@ -18,7 +18,7 @@ SBR-style workflow: pose the model in RViz first (no hardware, no firmware neede
 - [x] [T25 — ROS 2: bringup + live RViz mirror](T25-ros2-bringup.md)
 
 ## M2 — WiFi + web UI v1
-- [ ] [T06 — WiFi manager: STA + AP fallback + mDNS](T06-wifi-manager.md)
+- [x] [T06 — WiFi manager: STA + AP fallback + mDNS](T06-wifi-manager.md)
 - [ ] [T07 — HTTP server, LittleFS assets, WebSocket transport](T07-http-websocket.md)
 - [ ] [T08 — Web UI v1: joint sliders, enable/e-stop, trim panel](T08-web-ui-v1.md)
 

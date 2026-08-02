@@ -2,6 +2,14 @@
 
 Running diary — newest first. Agents append a short dated entry per completed task; the human adds hardware notes.
 
+## 2026-08-02 — T06: WiFi manager (STA + AP fallback + mDNS)
+
+- New `src/wifi_manager.{h,cpp}`: NVS-backed creds (namespace `net`), 15s STA attempt on boot falling back to `RoboArm-Setup` AP, mDNS `roboarm` in both modes, driven non-blockingly from `loop()` via `poll(now_ms)`. `Protocol` gained `cmd_wifi_set` (persist → ack → hooked reboot after 500ms; not gated on `enable`, since it's network config, not motion) and a `wifi` object in `state` (`mode`/`ip`/`rssi`), via three new `SystemHooks` fields appended after `ctx` per the pattern T05 established.
+- `protocol.md` only specified `mode:"sta"|"ap"|"off"`; added a fourth value, `"connecting"`, since the STA-attempt window is a real, distinct state the firmware sits in for up to 15s and a UI would reasonably want to show it rather than have it disappear into an inaccurate `"off"`.
+- The empty-password case (open WiFi networks are a legitimate `wifi_set` payload) collides with `Preferences::putString()`'s return value: it reports bytes written, and an empty string writes 0 bytes on success — indistinguishable from a failed write by return code alone. `save_creds()` sidesteps this entirely by reading the value back and comparing, rather than trusting the byte count. Caught by reasoning about the API before writing the code, not by a failure.
+- Verification approach unchanged from T04/T05 (no ESP32 toolchain in this sandbox): stub-compiled `main.cpp`/`wifi_manager.cpp`/the HAL clean under `-Wall -Wextra`. This time went one step further and made the `Preferences` stub *functional* (a real backing map, not fixed return values), then linked `wifi_manager.cpp` against it and ran 7 checks exercising the actual state machine — fresh-boot-to-AP, the save/load round-trip for both a normal and an empty password, begin()-with-stored-creds attempting STA, and the 15s poll()-driven timeout falling back to AP. All 7 passed, including the specific empty-password case above. Scratch-only, not committed.
+- `pio test -e native`: 56/56 (10 new — wifi_set validation/happy-path/storage-failure, wifi state field present/null, and a `BareFixture` with every optional hook left null proving `Protocol` never dereferences one directly, now exercised through the two new hooks too). `docs/bringup.md` gained Stage 4 (WiFi) per the policy from the previous entry; later stages renumbered 5-7. **Not verified: all (hardware) items — no board in this session.**
+
 ## 2026-08-02 — docs/bringup.md: consolidated bench session guide
 
 - The **(hardware)** items had accumulated across five task files (T04, T05, T23, T24, T25) — fine as specs, useless as a checklist when you're at the desk with a servo in hand. Gathered them into one ordered guide with the wiring, exact commands to type, and expected outputs.

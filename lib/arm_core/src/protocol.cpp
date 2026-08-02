@@ -137,6 +137,8 @@ void Protocol::dispatch(const char* cmd, JsonDocument& in, JsonDocument& out) {
         cmd_set_trim(in, out);
     } else if (!std::strcmp(cmd, "stream")) {
         cmd_stream(in, out);
+    } else if (!std::strcmp(cmd, "wifi_set")) {
+        cmd_wifi_set(in, out);
     } else {
         set_err(out, "unknown_cmd", "no such command");
     }
@@ -156,6 +158,16 @@ void Protocol::fill_state_fields(JsonDocument& out, uint32_t t_ms) {
     out["pose"] = nullptr;  // FK arrives in T13
     out["seq"] = nullptr;   // sequencer arrives in T11
     out["heap"] = hooks_.free_heap ? hooks_.free_heap(hooks_.ctx) : 0;
+
+    if (hooks_.wifi_info) {
+        const WifiInfo info = hooks_.wifi_info(hooks_.ctx);
+        JsonObject wifi = out["wifi"].to<JsonObject>();
+        wifi["mode"] = info.mode;
+        wifi["ip"] = info.ip;
+        wifi["rssi"] = info.rssi;
+    } else {
+        out["wifi"] = nullptr;
+    }
 }
 
 bool Protocol::require_enabled(JsonDocument& out) {
@@ -375,6 +387,35 @@ void Protocol::cmd_stream(JsonDocument& in, JsonDocument& out) {
     }
     stream_ = in["on"];
     out["type"] = "ack";
+}
+
+// Not gated on enabled: this is network config, unrelated to motion, and
+// needs to work during first-time setup before the arm has ever been armed.
+void Protocol::cmd_wifi_set(JsonDocument& in, JsonDocument& out) {
+    if (!in["ssid"].is<const char*>() || !in["pass"].is<const char*>()) {
+        set_err(out, "bad_args", "wifi_set needs string 'ssid' and 'pass'");
+        return;
+    }
+    const char* ssid = in["ssid"];
+    const char* pass = in["pass"];
+
+    const size_t ssid_len = std::strlen(ssid);
+    if (ssid_len == 0 || ssid_len > 32) {
+        set_err(out, "bad_args", "ssid must be 1-32 characters");
+        return;
+    }
+    if (std::strlen(pass) > 64) {
+        set_err(out, "bad_args", "pass must be at most 64 characters");
+        return;
+    }
+
+    if (!hooks_.set_wifi_creds || !hooks_.set_wifi_creds(ssid, pass, hooks_.ctx)) {
+        set_err(out, "storage", "could not save wifi credentials");
+        return;
+    }
+
+    out["type"] = "ack";
+    if (hooks_.request_reboot) hooks_.request_reboot(500, hooks_.ctx);
 }
 
 }  // namespace arm
