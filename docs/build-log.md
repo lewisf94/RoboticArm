@@ -2,6 +2,13 @@
 
 Running diary — newest first. Agents append a short dated entry per completed task; the human adds hardware notes.
 
+## 2026-08-02 — docs/bringup.md: consolidated bench session guide
+
+- The **(hardware)** items had accumulated across five task files (T04, T05, T23, T24, T25) — fine as specs, useless as a checklist when you're at the desk with a servo in hand. Gathered them into one ordered guide with the wiring, exact commands to type, and expected outputs.
+- Reading the source to write it turned up a hazard none of the task files mention: **the first `enable` snaps every servo to its home pose at full servo speed** (`on_enable` attaches, and the next tick writes `output_us()` for `current_deg`, which is still `home_deg` — no easing, because nothing was commanded). Led the guide with it.
+- Also verified rather than assumed, all from source: `set_trim` requires `enable` first (surprising, and a likely "why is this rejected" moment); e-stop is open=triggered so an unwired GPIO 10 blocks `enable` entirely; ch0/1/2 → GPIO 15/16/17; `j` indices 0/1/2 = base/shoulder/grip with home 0/60/30.
+- Guide ends with a results table to fill in and commit, and a reminder to tick the matching task files. CLAUDE.md now says new **(hardware)** items go in both places.
+
 ## 2026-08-02 — T25: ROS 2 bringup + live RViz mirror (M8 software-complete)
 
 - New `ros2/arm_bringup`: `bench.launch.py` (arm_bridge + robot_state_publisher + rviz2, with `port`/`baud`/`rviz` launch args) and `wave_demo` (enable → sine sweep on the shoulder → e-stop on Ctrl-C). Reuses `arm_description`'s URDF and RViz config rather than duplicating either.

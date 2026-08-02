@@ -79,6 +79,7 @@ To run the next task in a Claude Code session:
 
 ## Docs
 
+- **[docs/bringup.md](docs/bringup.md) — bench bring-up: every hardware check, in order. Start here when you have the rig on the desk.**
 - [docs/architecture.md](docs/architecture.md) — layers, runtime model, design decisions
 - [docs/hardware.md](docs/hardware.md) — BOM, wiring, pin map, power, frame design for the A1
 - [docs/kinematics.md](docs/kinematics.md) — geometry parameterization, FK/IK math, test vectors
