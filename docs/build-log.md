@@ -2,6 +2,15 @@
 
 Running diary — newest first. Agents append a short dated entry per completed task; the human adds hardware notes.
 
+## 2026-08-02 — T25: ROS 2 bringup + live RViz mirror (M8 software-complete)
+
+- New `ros2/arm_bringup`: `bench.launch.py` (arm_bridge + robot_state_publisher + rviz2, with `port`/`baud`/`rviz` launch args) and `wave_demo` (enable → sine sweep on the shoulder → e-stop on Ctrl-C). Reuses `arm_description`'s URDF and RViz config rather than duplicating either.
+- **Deviated from the task file and updated it** (per CLAUDE.md): it specified a 1–2 Hz target stream, but the device restarts an eased `MotionController` move on every `set_joints`, so sparse targets arrive as visible step-and-hold — contradicting the same task's "sweeps the physical shoulder smoothly" acceptance item. Implemented at 10 Hz (`rate_hz` parameter), which keeps each step ~2° and stays under arm_bridge's 20 Hz coalescing limit.
+- Verified `wave_demo` against stubbed rclpy with 28 checks, all green — sine stays inside 40–80° across a full sweep (and inside the profile's 0–120° shoulder limits), publishes radians on the right joint name, and every safety path holds: nothing is published before `arm()` succeeds, a missing bridge or a device refusal (`estop pin active`) both abort without a single target, `emergency_stop` fires from `main()`'s finally block even when enable failed, and it neither crashes nor raises when the context is already dead. Scratch-only harness, not committed.
+- Two decisions worth recording: (1) `rclpy.init(signal_handler_options=NO)` so Ctrl-C raises `KeyboardInterrupt` with the context still alive — the default handler tears it down first, leaving the exit e-stop nothing to send on (guarded by an ImportError fallback since I can't run rclpy here); (2) no `joint_state_publisher_gui` in this launch, since the device now owns `/joint_states` and running T23's slider GUI simultaneously would fight it — the two launches are meant to be used one at a time, now stated in both READMEs.
+- Documented prominently that RViz shows **commanded** angles, not measured: hobby servos have no feedback, so a stalled or unpowered joint will still look fine in the model.
+- Verified: `pio test -e native` unaffected (46/46), codec 46/46, wave_demo 28/28, launch/setup syntax clean. **Not verified: CI (checking after push) and all (hardware) items — no device or ROS 2 install in this session.**
+
 ## 2026-07-24 — T24: ROS 2 serial bridge node
 
 - New `ros2/arm_bridge` (ament_python): `protocol_codec.py` (pure Python — parses `state`/`hello`/`ack`/`err`, builds commands, owns every deg↔rad and mm↔m conversion), `serial_transport.py` (pyserial line framing behind a 3-method interface), `bridge.py` (the rclpy node), 46 pytest cases, README.

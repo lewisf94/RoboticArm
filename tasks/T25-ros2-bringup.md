@@ -8,7 +8,8 @@ One command = the SBR experience: RViz shows a live digital twin of the physical
 ## Spec
 - Package `ros2/arm_bringup` (ament_python or ament_cmake, launch-only + one script):
   - `launch/bench.launch.py` — `arm_bridge` node + `robot_state_publisher` (loading `arm_description`'s xacro) + rviz2 with saved config. Bridge's `/joint_states` feeds `robot_state_publisher` so RViz mirrors what the device reports (which is the *commanded* angle — hobby servos have no position feedback; note this in the README so nobody expects the model to track a hand-moved servo).
-  - `wave_demo` node/script: calls `/arm/enable`, then publishes a slow sine on the shoulder between two safe angles (e.g. 40°–80° equivalent in radians) at 1–2 Hz update; on Ctrl-C calls `/arm/estop` before exiting.
+  - `wave_demo` node/script: calls `/arm/enable`, then publishes a slow sine on the shoulder between two safe angles (e.g. 40°–80° equivalent in radians); on Ctrl-C calls `/arm/estop` before exiting.
+    - ~~at 1–2 Hz update~~ → **10 Hz** (implemented, parameterized as `rate_hz`). Corrected during T25: the device restarts an eased `MotionController` move on every `set_joints`, so a 1–2 Hz target stream arrives as a visible step-and-hold, contradicting this task's own "sweeps the physical shoulder smoothly" acceptance item. 10 Hz keeps each step ~2° and sits under `arm_bridge`'s 20 Hz coalescing limit.
   - `README.md` quickstart: plug in bench → `ros2 launch arm_bringup bench.launch.py` → run demo.
 - Port/params passthrough on the launch file (`port:=/dev/ttyACM1` must work).
 
