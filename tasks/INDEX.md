@@ -20,7 +20,7 @@ SBR-style workflow: pose the model in RViz first (no hardware, no firmware neede
 ## M2 — WiFi + web UI v1
 - [x] [T06 — WiFi manager: STA + AP fallback + mDNS](T06-wifi-manager.md)
 - [x] [T07 — HTTP server, LittleFS assets, WebSocket transport](T07-http-websocket.md)
-- [ ] [T08 — Web UI v1: joint sliders, enable/e-stop, trim panel](T08-web-ui-v1.md)
+- [x] [T08 — Web UI v1: joint sliders, enable/e-stop, trim panel](T08-web-ui-v1.md)
 
 ## M3 — Poses & sequences
 - [ ] [T09 — PoseStore in core + persistence interface](T09-pose-store.md)

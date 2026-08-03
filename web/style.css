@@ -1,0 +1,220 @@
+/* Vanilla CSS, no framework (CLAUDE.md). Single column, thumb-sized
+   controls, holds together at 360px wide (phone-in-portrait is the primary
+   target - see T08). */
+
+:root {
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --red: #dc2626;
+    --red-dark: #b91c1c;
+    --green: #16a34a;
+    --track: #f2f2f2;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font: 16px/1.5 system-ui, sans-serif;
+    color: var(--fg);
+    background: var(--bg);
+    margin: 0;
+    padding: 0 0 5rem;
+    max-width: 480px;
+    margin-inline: auto;
+}
+
+h1,
+p {
+    margin: 0;
+}
+
+/* ---- header ---- */
+
+.bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 0.75rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--red);
+}
+
+.dot.connected {
+    background: var(--green);
+}
+
+.profile-name {
+    flex: 1 1 auto;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wifi {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.enable-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 0 0 auto;
+}
+
+.enable-toggle input {
+    width: 22px;
+    height: 22px;
+}
+
+.estop {
+    flex: 0 0 auto;
+    min-height: 48px;
+    min-width: 76px;
+    padding: 0 0.75rem;
+    background: var(--red);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.estop:active {
+    background: var(--red-dark);
+}
+
+/* ---- joint rows ---- */
+
+#joints {
+    padding: 0.25rem 1rem;
+}
+
+.joints-placeholder {
+    padding: 2rem 0;
+    text-align: center;
+    color: var(--muted);
+}
+
+.joint-row,
+.trim-row {
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.joint-row.flash {
+    animation: flash-row 600ms ease-out;
+}
+
+@keyframes flash-row {
+    0% {
+        background: rgba(220, 38, 38, 0.25);
+    }
+    100% {
+        background: transparent;
+    }
+}
+
+.joint-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.35rem;
+}
+
+.joint-name {
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.joint-readout {
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+}
+
+.slider-wrap {
+    position: relative;
+    padding-top: 10px;
+}
+
+input[type='range'] {
+    width: 100%;
+    height: 32px;
+    accent-color: var(--green);
+}
+
+input[type='range']:disabled {
+    opacity: 0.4;
+}
+
+.target-marker {
+    position: absolute;
+    top: 0;
+    width: 3px;
+    height: 8px;
+    background: var(--fg);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+/* ---- trims ---- */
+
+.trims {
+    margin: 0.5rem 1rem 0;
+    border-top: 1px solid var(--border);
+    padding-top: 0.25rem;
+}
+
+.trims summary {
+    padding: 0.6rem 0;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.trim-slider {
+    accent-color: var(--muted);
+}
+
+/* ---- toasts ---- */
+
+.toasts {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    pointer-events: none;
+    z-index: 20;
+}
+
+.toast {
+    max-width: calc(100% - 2rem);
+    background: #111827;
+    color: #fff;
+    padding: 0.5rem 0.9rem;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}

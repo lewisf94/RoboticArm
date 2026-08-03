@@ -1,9 +1,9 @@
 # Bench bring-up guide
 
 Everything waiting on real hardware, in the order to do it. This consolidates
-the **(hardware)** acceptance items from tasks T04, T05, T06, T07, T23, T24
-and T25 — those task files stay the source of truth; this is the version you
-can actually work through at a desk.
+the **(hardware)** acceptance items from tasks T04, T05, T06, T07, T08, T23,
+T24 and T25 — those task files stay the source of truth; this is the version
+you can actually work through at a desk.
 
 Stages 1–3 need only the ESP32 and one servo. Stage 4 additionally needs a
 WiFi network (or just a phone to check the AP appears). Stage 5 needs Stage
@@ -204,18 +204,36 @@ password.
 
 ---
 
-## Stage 5 — Web UI placeholder over WiFi  *(task T07)*
+## Stage 5 — Web UI over WiFi  *(tasks T07, T08)*
 
 Needs Stage 4 done (device joined to your WiFi, `roboarm.local` resolving).
 
-**Browser.** Open `http://roboarm.local` on a machine on the same network:
+**Browser, ideally a phone.** Open `http://roboarm.local`:
 
-☐ Page loads "RoboArm — UI arrives in T08", and within ~100ms the `<pre>`
-below it fills in with live JSON (`t`, `en`, `j`, `tgt`, `heap`, `wifi`, ...)
-ticking at 10 Hz. (This placeholder just proves the pipe — the real sliders
-land in T08.)
+☐ The real UI loads within ~100ms of connecting: a green connection dot,
+profile name (`bench_3dof`), WiFi RSSI, an **Enable** checkbox, a big red
+**E-STOP** button, one slider per joint (base/shoulder/grip), and a
+collapsible **Trims** panel. Layout holds together at phone width.
 
-**WebSocket round-trip.** From a machine with
+**Slide joints.**
+
+| Check | Expected |
+|---|---|
+| ☐ tick Enable | joint sliders go from greyed-out/inert to interactive |
+| ☐ drag the base slider slowly | servo tracks smoothly, the readout counts with it, no stutter or runaway repeats |
+| ☐ drag it fast, end-to-end | still smooth — `set_joint` is throttled to 10/s client-side, so a fast drag doesn't flood the device |
+| ☐ drag the grip slider | shows/sends a 0–100% open/close value, not raw degrees |
+| ☐ E-STOP mid-drag | arm goes limp **instantly**, Enable unticks itself, all sliders grey out again |
+
+**Trims.** Expand the Trims panel, nudge one joint's trim slider and let go:
+
+| Check | Expected |
+|---|---|
+| ☐ drag a trim slider | nothing is sent while dragging (`set_trim` fires on release only) |
+| ☐ release it | servo shifts by the trim amount |
+| ☐ reboot the device, re-open the page, re-enable | the trim from before reboot is still applied (NVS, same storage as Stage 3). The trim **slider itself resets to 0 on page load** either way — the protocol has no "read back the stored trim" command, so the servo's actual position is the only record; this is expected, not a bug |
+
+**WebSocket round-trip (protocol-level, for debugging).** From a machine with
 [websocat](https://github.com/vi/websocat):
 
 ```bash
@@ -230,15 +248,14 @@ websocat ws://roboarm.local/ws
 | ☐ send `{"cmd":"wifi_set","ssid":"x","pass":"y"}` | rejected: `{"type":"err",...,"code":"bad_args","msg":"serial-only command"}` — WS must never be able to trigger a reboot |
 | ☐ send `{"cmd":"stream","on":true}` | rejected the same way — WS already streams unconditionally, and this flag is shared with the serial console |
 
-**Multiple clients + disconnect safety.** Open the browser page in two tabs
-at once, and get the arm moving (a `set_joint` over serial, or a slow `home`,
-works well since it takes a couple of seconds):
+**Multiple clients + disconnect safety.** Open the page on two devices (or
+two browser tabs) at once, and get the arm moving from one of them:
 
 | Check | Expected |
 |---|---|
-| ☐ both tabs update simultaneously | same numbers, same ~10 Hz rate |
-| ☐ close one tab mid-move | the other tab keeps streaming and the arm keeps moving to its target — a disconnect must never pause, hold early, or cancel motion |
-| ☐ open a 5th concurrent client (e.g. 2 browser tabs + 3 `websocat` sessions) | the oldest connection gets closed to enforce the 4-client cap; the 4 newest keep streaming uninterrupted |
+| ☐ second device stays in sync | same slider positions, same readouts, same ~10 Hz rate |
+| ☐ close/lose one client mid-move | the other keeps streaming and the arm keeps moving to its target — a disconnect must never pause, hold early, or cancel motion |
+| ☐ open a 5th concurrent client (e.g. 2 devices + 3 `websocat` sessions) | the oldest connection gets closed to enforce the 4-client cap; the 4 newest keep streaming uninterrupted |
 
 ---
 
@@ -349,7 +366,7 @@ anything surprising.
 | 2 — first motion (T04) | | |
 | 3 — e-stop, trims, telemetry (T05) | | |
 | 4 — WiFi (T06) | | |
-| 5 — web UI placeholder (T07) | | |
+| 5 — web UI (T07, T08) | | |
 | 6 — RViz model (T23) | | |
 | 7 — bridge (T24) | | |
 | 8 — bringup + demo (T25) | | |

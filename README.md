@@ -33,7 +33,7 @@ Planning is complete; implementation is task-driven (see below).
 | M0 | Repo scaffold, CI, planning docs | ✅ done |
 | M1 | Core foundations + first servo motion over serial | 🟡 code done — bench check pending |
 | M8 | ROS 2: URDF + RViz + serial bridge + bringup | 🟡 code done — bench check pending |
-| M2 | WiFi, WebSocket, web UI with joint sliders | ⬜ |
+| M2 | WiFi, WebSocket, web UI with joint sliders | 🟡 code done — bench check pending |
 | M3 | Poses + sequence record/replay | ⬜ |
 | M4 | FK/IK + cartesian control | ⬜ |
 | M5 | Three.js 3D visualizer + browser sim mode | ⬜ |

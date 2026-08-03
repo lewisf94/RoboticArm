@@ -4,29 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RoboArm</title>
-<style>
-  body { font: 14px/1.5 system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
-  h1 { font-size: 1.1rem; }
-  pre { background: #f2f2f2; padding: 1rem; border-radius: 6px; overflow-x: auto; }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<h1>RoboArm — UI arrives in T08</h1>
-<p>Live state from this firmware's own WebSocket at <code>/ws</code>:</p>
-<pre id="state">connecting…</pre>
+<header class="bar">
+  <span id="dot" class="dot" title="disconnected"></span>
+  <span id="profile-name" class="profile-name">RoboArm</span>
+  <span id="wifi" class="wifi">–</span>
+  <label class="enable-toggle" title="Enable">
+    <input type="checkbox" id="enable-toggle" aria-label="Enable" disabled>
+  </label>
+  <button id="estop" class="estop" type="button">E-STOP</button>
+</header>
 
-<script>
-  // Placeholder only - T08 replaces this with the real UI (joint sliders,
-  // enable/e-stop, trims). This just proves the WS pipe end to end.
-  const el = document.getElementById('state');
-  const ws = new WebSocket(`ws://${location.host}/ws`);
-  ws.onopen = () => { el.textContent = 'connected, waiting for state…'; };
-  ws.onclose = () => { el.textContent = 'disconnected'; };
-  ws.onerror = () => { el.textContent = 'error - see browser console'; };
-  ws.onmessage = (ev) => {
-    const msg = JSON.parse(ev.data);
-    if (msg.type === 'state') el.textContent = JSON.stringify(msg, null, 2);
-  };
-</script>
+<main id="joints">
+  <p id="joints-placeholder" class="joints-placeholder">disconnected — retrying…</p>
+</main>
+
+<details class="trims">
+  <summary>Trims</summary>
+  <div id="trim-rows"></div>
+</details>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
