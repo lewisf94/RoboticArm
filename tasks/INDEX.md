@@ -23,7 +23,7 @@ SBR-style workflow: pose the model in RViz first (no hardware, no firmware neede
 - [x] [T08 — Web UI v1: joint sliders, enable/e-stop, trim panel](T08-web-ui-v1.md)
 
 ## M3 — Poses & sequences
-- [ ] [T09 — PoseStore in core + persistence interface](T09-pose-store.md)
+- [x] [T09 — PoseStore in core + persistence interface](T09-pose-store.md)
 - [ ] [T10 — Poses end-to-end: LittleFS persistence + UI panel](T10-poses-ui.md)
 - [ ] [T11 — Sequencer state machine in core](T11-sequencer-core.md)
 - [ ] [T12 — Sequences end-to-end: persistence + editor/player UI](T12-sequences-ui.md)

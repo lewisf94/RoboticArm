@@ -139,6 +139,14 @@ void Protocol::dispatch(const char* cmd, JsonDocument& in, JsonDocument& out) {
         cmd_stream(in, out);
     } else if (!std::strcmp(cmd, "wifi_set")) {
         cmd_wifi_set(in, out);
+    } else if (!std::strcmp(cmd, "save_pose")) {
+        cmd_save_pose(in, out);
+    } else if (!std::strcmp(cmd, "goto_pose")) {
+        cmd_goto_pose(in, out);
+    } else if (!std::strcmp(cmd, "list_poses")) {
+        cmd_list_poses(out);
+    } else if (!std::strcmp(cmd, "delete_pose")) {
+        cmd_delete_pose(in, out);
     } else {
         set_err(out, "unknown_cmd", "no such command");
     }
@@ -416,6 +424,72 @@ void Protocol::cmd_wifi_set(JsonDocument& in, JsonDocument& out) {
 
     out["type"] = "ack";
     if (hooks_.request_reboot) hooks_.request_reboot(500, hooks_.ctx);
+}
+
+// Not gated on enabled: it only reads the targets MotionController already
+// holds (which survive both disable and estop), same rationale as
+// get_state. There's nothing to move here, so nothing needs arming.
+void Protocol::cmd_save_pose(JsonDocument& in, JsonDocument& out) {
+    const char* name = in["name"] | "";
+    switch (pose_store_.save(name, motion_)) {
+        case PoseResult::ok:
+            out["type"] = "ack";
+            return;
+        case PoseResult::full:
+            set_err(out, "storage", "pose store is full");
+            return;
+        case PoseResult::bad_name:
+        case PoseResult::not_found:  // save() never actually returns this
+        default:
+            set_err(out, "bad_args", "invalid pose name");
+            return;
+    }
+}
+
+// Gated on enabled, same as any other command that moves the arm. Stored
+// angles are clamped to the *current* profile limits before being handed to
+// move_to() rather than passed through as-is: move_to() rejects a move
+// outright if any single joint is out of range, which would make a pose
+// saved under a since-narrowed profile (or a hand-edited poses.json)
+// unusable instead of just imprecise. Clamping is the deliberately more
+// forgiving choice for a stored, previously-trusted pose than for a live
+// set_joint/set_joints call, which still rejects out-of-range input.
+void Protocol::cmd_goto_pose(JsonDocument& in, JsonDocument& out) {
+    if (!require_enabled(out)) return;
+
+    const char* name = in["name"] | "";
+    const Pose* pose = pose_store_.find(name);
+    if (!pose) {
+        set_err(out, "not_found", "no such pose");
+        return;
+    }
+
+    float targets[kMaxJoints];
+    for (uint8_t i = 0; i < profile_.n_joints; ++i) {
+        targets[i] = motion_.joint(i).clamp(pose->deg[i]);
+    }
+    const int dur_arg = in["dur"] | 0;
+    const uint32_t dur_ms = dur_arg > 0 ? static_cast<uint32_t>(dur_arg) : 0;
+
+    motion_.move_to(targets, profile_.n_joints, dur_ms);  // pre-clamped, always in-range
+    out["type"] = "ack";
+}
+
+void Protocol::cmd_list_poses(JsonDocument& out) {
+    out["type"] = "ack";
+    JsonArray names = out["poses"].to<JsonArray>();
+    for (uint8_t i = 0; i < pose_store_.count(); ++i) {
+        names.add(pose_store_.at(i).name);
+    }
+}
+
+void Protocol::cmd_delete_pose(JsonDocument& in, JsonDocument& out) {
+    const char* name = in["name"] | "";
+    if (pose_store_.remove(name) == PoseResult::not_found) {
+        set_err(out, "not_found", "no such pose");
+        return;
+    }
+    out["type"] = "ack";
 }
 
 }  // namespace arm

@@ -35,9 +35,10 @@ Error codes: `bad_json` · `unknown_cmd` · `bad_args` · `out_of_range` (joint 
 | `grip` | `pct:float` (0=open, 100=closed) | maps to gripper joint range; `pct` is clamped to 0..100; requires `enable` |
 | `set_trim` | `j:int, deg:float` | persisted (NVS) offset added at output; applied live even if persistence fails (→ `err storage`); requires `enable` |
 | `home` | `dur?:int` | synchronized move to profile home pose; requires `enable` |
-| `save_pose` | `name:str` | stores current **targets** |
-| `goto_pose` | `name:str, dur?:int` | |
-| `list_poses` / `delete_pose` | — / `name` | |
+| `save_pose` | `name:str` | stores current **targets** (not live/current angles) under `name`, overwriting a pose already saved under that name; `name` 1–16 chars `[A-Za-z0-9_-]` else `bad_args`; store caps at 32 poses, full → `err storage`. Not gated on `enable` — it only reads targets `MotionController` already holds (implemented T09; in-memory only until T10 wires up LittleFS) |
+| `goto_pose` | `name:str, dur?:int` | synchronized move to a saved pose; requires `enable`; unknown `name` → `err not_found`. Stored angles are clamped to the current profile's joint limits before moving (not rejected like `set_joint`/`set_joints` would) — a pose is previously-trusted data, not live input, so a stale pose (saved under a since-narrowed profile, or a hand-edited pose file) degrades to "closest reachable" instead of becoming entirely unusable (implemented T09) |
+| `list_poses` | — | `{"type":"ack","cmd":"list_poses","poses":["name",…]}`, insertion order; not gated on `enable` (implemented T09) |
+| `delete_pose` | `name:str` | unknown `name` → `err not_found`; not gated on `enable` (implemented T09) |
 | `save_seq` | `name:str, steps:[{pose:str, dur:int, dwell:int}…], loop:bool` | |
 | `run_seq` / `stop_seq` / `list_seqs` / `delete_seq` | `name` / — / — / `name` | |
 | `stream` | `on: bool` | serial-only: toggles 10 Hz `state` lines (implemented T05; allowed while disabled — it's read-only telemetry). **Rejected over WS** (`err bad_args`, T07) — WS already gets `state` pushed at 10 Hz unconditionally (see below), and `stream`'s on/off flag is shared across both transports, so a WS client toggling it would silently start or stop a human's serial console telemetry |

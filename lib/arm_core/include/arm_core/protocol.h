@@ -7,6 +7,7 @@
 
 #include "arm_core/config.h"
 #include "arm_core/motion.h"
+#include "arm_core/pose_store.h"
 
 // Transport-agnostic command protocol - docs/protocol.md is the contract,
 // this class is its only implementation. One line of JSON in, one line of
@@ -92,11 +93,19 @@ private:
     // dispatcher is transport-agnostic and has no way to know which one
     // called it, so it cannot enforce that rule itself.
     void cmd_wifi_set(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
+    // Poses (T09): in-memory only in this dispatcher - it has no IFileStore
+    // to persist through yet (that wiring, on-device LittleFS, is T10), so
+    // saved poses don't survive a reboot until then.
+    void cmd_save_pose(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
+    void cmd_goto_pose(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
+    void cmd_list_poses(ArduinoJson::JsonDocument& out);
+    void cmd_delete_pose(ArduinoJson::JsonDocument& in, ArduinoJson::JsonDocument& out);
 
     MotionController& motion_;
     const ArmProfile& profile_;
     SystemHooks hooks_;
     bool stream_ = false;
+    PoseStore pose_store_;
 };
 
 }  // namespace arm
